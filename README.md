@@ -549,10 +549,9 @@ Two new node editors, picked from the Node Editor's type menu.
 
 ### Texture Graph nodes
 
-254 nodes of its own, sorted as in the Add menu. Click a group to open it. The Texture Graph also uses the Compositor's color, blur and math nodes.
+254 nodes of its own, sorted as in the Add menu. The Texture Graph also uses the Compositor's color, blur and math nodes.
 
-<details>
-<summary><b>Texture</b> (4)</summary>
+**<img src="doc/fork/images/icons/node_lib_texture.png" width="32" height="32" alt=""> Texture** (4)
 
 | Node | What it does |
 |---|---|
@@ -561,10 +560,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Text | Draw text into an image, using any font file |
 | SVG | Draw a vector drawing from an SVG file into an image at any size |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Noise</b> (38)</summary>
+**<img src="doc/fork/images/icons/node_lib_noise.png" width="32" height="32" alt=""> Texture ▸ Noise** (38)
 
 | Node | What it does |
 |---|---|
@@ -607,10 +603,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Gaussian Spots 1 | Soft round spots |
 | Gaussian Spots 2 | Soft round spots of two sizes |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Grunge</b> (30)</summary>
+**<img src="doc/fork/images/icons/node_lib_grunge.png" width="32" height="32" alt=""> Texture ▸ Grunge** (30)
 
 | Node | What it does |
 |---|---|
@@ -645,19 +638,13 @@ Two new node editors, picked from the Node Editor's type menu.
 | Dirt 4 | Dirt in cracks |
 | Dirt 5 | Swirled dirt with spots |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Grunge Maps</b> (15)</summary>
+**<img src="doc/fork/images/icons/node_lib_grunge_maps.png" width="32" height="32" alt=""> Texture ▸ Grunge Maps** (15)
 
 | Node | What it does |
 |---|---|
 | Grunge Map 001 to 015 | Fifteen ready-made grunge masks |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Patterns</b> (16)</summary>
+**<img src="doc/fork/images/icons/node_lib_patterns.png" width="32" height="32" alt=""> Texture ▸ Patterns** (16)
 
 | Node | What it does |
 |---|---|
@@ -678,10 +665,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Gaussian 2 | Soft blobs in staggered rows |
 | Triangle Grid | A grid of jittered triangles seen from above |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Gradients</b> (7)</summary>
+**<img src="doc/fork/images/icons/node_lib_gradients.png" width="32" height="32" alt=""> Texture ▸ Gradients** (7)
 
 | Node | What it does |
 |---|---|
@@ -693,10 +677,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Gradient Circular | A ramp that sweeps around a point |
 | Gradient Radial | A fade from a center out to a radius |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Shapes</b> (8)</summary>
+**<img src="doc/fork/images/icons/node_lib_shapes.png" width="32" height="32" alt=""> Texture ▸ Shapes** (8)
 
 | Node | What it does |
 |---|---|
@@ -709,10 +690,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Height Extrude | Raise a height into a solid and see it from a turned camera |
 | Panorama Shape | Place a light panel in a panorama |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Scatter</b> (13)</summary>
+**<img src="doc/fork/images/icons/node_lib_scatter.png" width="32" height="32" alt=""> Texture ▸ Scatter** (13)
 
 | Node | What it does |
 |---|---|
@@ -730,10 +708,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Shape Splatter Data Extract | Split the data of a Shape Splatter into separate maps |
 | Shape Splatter to Mask | A mask of chosen shapes of a Shape Splatter |
 
-</details>
-
-<details>
-<summary><b>Texture ▸ Stone</b> (3)</summary>
+**<img src="doc/fork/images/icons/node_lib_stone.png" width="32" height="32" alt=""> Texture ▸ Stone** (3)
 
 | Node | What it does |
 |---|---|
@@ -741,10 +716,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Fitted Wall | Walls of stones cut to fit their neighbors |
 | Packed Wall | Walls of stones stacked one by one |
 
-</details>
-
-<details>
-<summary><b>Color</b> (9)</summary>
+**<img src="doc/fork/images/icons/node_lib_color.png" width="32" height="32" alt=""> Color** (9)
 
 | Node | What it does |
 |---|---|
@@ -758,10 +730,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Chrominance Extract | Keep only the color of an image, without its brightness |
 | Color To Mask | White where the image is close to a color |
 
-</details>
-
-<details>
-<summary><b>Color ▸ Adjust</b> (8)</summary>
+**<img src="doc/fork/images/icons/node_lib_adjust.png" width="32" height="32" alt=""> Color ▸ Adjust** (8)
 
 | Node | What it does |
 |---|---|
@@ -774,10 +743,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Quantize Color (Simple) | Snap each channel to a few even steps |
 | HDR Range Viewer | Show where values go below 0 or above 1 |
 
-</details>
-
-<details>
-<summary><b>Color ▸ Histogram</b> (12)</summary>
+**<img src="doc/fork/images/icons/node_lib_histogram.png" width="32" height="32" alt=""> Color ▸ Histogram** (12)
 
 | Node | What it does |
 |---|---|
@@ -794,10 +760,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Histogram Render | Draw the histogram of an image as a chart |
 | Min Max | Find the lowest and highest value of an image |
 
-</details>
-
-<details>
-<summary><b>Color ▸ Palette</b> (6)</summary>
+**<img src="doc/fork/images/icons/node_lib_palette.png" width="32" height="32" alt=""> Color ▸ Palette** (6)
 
 | Node | What it does |
 |---|---|
@@ -808,10 +771,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | View Color Palette | Show a palette as a grid of color swatches |
 | ID to Mask | White where an ID map has the chosen IDs |
 
-</details>
-
-<details>
-<summary><b>Filter</b> (11)</summary>
+**<img src="doc/fork/images/icons/node_lib_filter.png" width="32" height="32" alt=""> Filter** (11)
 
 | Node | What it does |
 |---|---|
@@ -827,10 +787,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Lighting Cancel Low Frequencies | Even out broad light and shadow while keeping the colors |
 | Height Map Frequencies Mapper | Split a height map into broad shapes and fine detail |
 
-</details>
-
-<details>
-<summary><b>Filter ▸ Effects</b> (14)</summary>
+**<img src="doc/fork/images/icons/node_lib_effects.png" width="32" height="32" alt=""> Filter ▸ Effects** (14)
 
 | Node | What it does |
 |---|---|
@@ -849,10 +806,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Mosaic | Break an image into flat colored tiles |
 | Summed Area Table | Sum the pixels below and left of each pixel |
 
-</details>
-
-<details>
-<summary><b>Filter ▸ Shape Effects</b> (4)</summary>
+**<img src="doc/fork/images/icons/node_lib_shape_effects.png" width="32" height="32" alt=""> Filter ▸ Shape Effects** (4)
 
 | Node | What it does |
 |---|---|
@@ -861,10 +815,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Shape Glow | Make shapes glow around or inside their edges |
 | Shape Stroke | Draw a line along the edges of shapes |
 
-</details>
-
-<details>
-<summary><b>Filter ▸ Flood Fill</b> (9)</summary>
+**<img src="doc/fork/images/icons/node_lib_flood_fill.png" width="32" height="32" alt=""> Filter ▸ Flood Fill** (9)
 
 | Node | What it does |
 |---|---|
@@ -878,10 +829,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Flood Fill to Random Color | Fill each shape with a random color |
 | Flood Fill to Random Grayscale | Fill each shape with a random gray |
 
-</details>
-
-<details>
-<summary><b>Filter ▸ Normal Map</b> (14)</summary>
+**<img src="doc/fork/images/icons/node_lib_normal_map.png" width="32" height="32" alt=""> Filter ▸ Normal Map** (14)
 
 | Node | What it does |
 |---|---|
@@ -900,10 +848,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Facing Normal | How much a normal map faces straight out |
 | Bent Normal | Turn a normal map toward the open sky over a height |
 
-</details>
-
-<details>
-<summary><b>Filter ▸ Blur</b> (6)</summary>
+**<img src="doc/fork/images/icons/node_lib_blur.png" width="32" height="32" alt=""> Filter ▸ Blur** (6)
 
 | Node | What it does |
 |---|---|
@@ -914,10 +859,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Median Filter | Remove specks and noise while keeping edges sharp |
 | MLV Filter | Flatten areas of similar pixels while keeping the edges between them sharp |
 
-</details>
-
-<details>
-<summary><b>Transform</b> (18)</summary>
+**<img src="doc/fork/images/icons/node_lib_transform.png" width="32" height="32" alt=""> Transform** (18)
 
 | Node | What it does |
 |---|---|
@@ -940,10 +882,7 @@ Two new node editors, picked from the Node Editor's type menu.
 | Clone | Copy a round patch of an image to another place |
 | Size | Change the pixel size and bit depth that the following nodes work at |
 
-</details>
-
-<details>
-<summary><b>Transform ▸ Tiling</b> (6)</summary>
+**<img src="doc/fork/images/icons/node_lib_tiling.png" width="32" height="32" alt=""> Transform ▸ Tiling** (6)
 
 | Node | What it does |
 |---|---|
@@ -954,18 +893,13 @@ Two new node editors, picked from the Node Editor's type menu.
 | Noise Upscale 2 | Make a tiling noise finer from three turned copies |
 | Noise Upscale 3 | Make a tiling noise finer from four turned and mirrored copies |
 
-</details>
-
-<details>
-<summary><b>Utilities ▸ Function</b> (3)</summary>
+**<img src="doc/fork/images/icons/node_lib_function.png" width="32" height="32" alt=""> Utilities ▸ Function** (3)
 
 | Node | What it does |
 |---|---|
 | Position | Where each pixel is and how big the image is, to build functions from |
 | Sample | Read an image at any position, wrapping around its edges |
 | Random | A random number from a seed, once or for every pixel |
-
-</details>
 
 ## Outliner
 
