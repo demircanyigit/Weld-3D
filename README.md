@@ -553,353 +553,367 @@ Two new node editors, picked from the Node Editor's type menu.
 
 **<img src="doc/fork/images/icons/node_lib_texture.png" width="32" height="32" alt=""> Texture** (4)
 
-| Node | What it does |
-|---|---|
-| Tiling Noise | Noise that repeats exactly at the image edges |
-| FX-Map | Scatter a pattern over a grid of cells, each copy with its own random offset, size, rotation and brightness |
-| Text | Draw text into an image, using any font file |
-| SVG | Draw a vector drawing from an SVG file into an image at any size |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_tiling_noise.png" width="32" height="32" alt="Tiling Noise"> | Tiling Noise | Noise that repeats exactly at the image edges |
+| <img src="doc/fork/images/icons/node_tg_fx_map.png" width="32" height="32" alt="FX-Map"> | FX-Map | Scatter a pattern over a grid of cells, each copy with its own random offset, size, rotation and brightness |
+| <img src="doc/fork/images/icons/node_tg_text.png" width="32" height="32" alt="Text"> | Text | Draw text into an image, using any font file |
+| <img src="doc/fork/images/icons/node_tg_svg.png" width="32" height="32" alt="SVG"> | SVG | Draw a vector drawing from an SVG file into an image at any size |
 
 **<img src="doc/fork/images/icons/node_lib_noise.png" width="32" height="32" alt=""> Texture ▸ Noise** (38)
 
-| Node | What it does |
-|---|---|
-| Perlin Noise | Soft gradient noise in one layer |
-| Fractal Sum Base | Value noise summed over a chosen range of layers |
-| Fractal Sum 1 | Soft value noise in four layers |
-| Fractal Sum 2 | Detailed value noise in seven layers |
-| Fractal Sum 3 | Ridges with sharp bright crests |
-| Fractal Sum 4 | Billowy noise with sharp dark creases |
-| Clouds 1 | Soft clouds |
-| Clouds 2 | Clouds with more contrast and detail |
-| Clouds 3 | Swirled detailed clouds |
-| Plasma | Clouds folded into bands |
-| Creased | Thin bright folds, like crumpled paper |
-| Fluid | Clouds swirled twice, like stirred liquid |
-| Liquid | Swirled bands, like marbled paint |
-| Gaussian Noise | Fine noise that is mostly mid gray |
-| White Noise | A random gray for every pixel |
-| White Noise Fast | A random gray for every square of a grid |
-| Blue Noise Fast | Pixel noise with no clumps |
-| Anisotropic Noise | Noise stretched into long streaks |
-| Directional Noise 1 | Smooth vertical streaks |
-| Directional Noise 2 | Detailed vertical streaks |
-| Directional Noise 3 | Wavy vertical streaks |
-| Directional Noise 4 | Thin bright vertical lines |
-| Directional Scratches | Short scratches that mostly point one way |
-| Cells 1 | Bright cell centers fading out |
-| Cells 2 | Cells with dark edges |
-| Cells 3 | A flat random gray per cell |
-| Cells 4 | Cells of three sizes on top of each other |
-| Voronoi | Cells around scattered points |
-| Voronoi Fractal | Cell distances over several sizes |
-| Crystal 1 | Shaded facets, like broken crystal |
-| Crystal 2 | Facets of two sizes |
-| Caustics | Bright wavy lines, like light under water |
-| Microscope View | Cells with soft walls, like tissue |
-| BnW Spots 1 | Black and white blobs |
-| BnW Spots 2 | Black and white blobs with rough edges |
-| BnW Spots 3 | Scattered black and white blobs |
-| Gaussian Spots 1 | Soft round spots |
-| Gaussian Spots 2 | Soft round spots of two sizes |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_perlin_noise.png" width="32" height="32" alt="Perlin Noise"> | Perlin Noise | Soft gradient noise in one layer |
+| <img src="doc/fork/images/icons/node_tg_fractal_sum_base.png" width="32" height="32" alt="Fractal Sum Base"> | Fractal Sum Base | Value noise summed over a chosen range of layers |
+| <img src="doc/fork/images/icons/node_tg_fractal_sum_1.png" width="32" height="32" alt="Fractal Sum 1"> | Fractal Sum 1 | Soft value noise in four layers |
+| <img src="doc/fork/images/icons/node_tg_fractal_sum_2.png" width="32" height="32" alt="Fractal Sum 2"> | Fractal Sum 2 | Detailed value noise in seven layers |
+| <img src="doc/fork/images/icons/node_tg_fractal_sum_3.png" width="32" height="32" alt="Fractal Sum 3"> | Fractal Sum 3 | Ridges with sharp bright crests |
+| <img src="doc/fork/images/icons/node_tg_fractal_sum_4.png" width="32" height="32" alt="Fractal Sum 4"> | Fractal Sum 4 | Billowy noise with sharp dark creases |
+| <img src="doc/fork/images/icons/node_tg_clouds_1.png" width="32" height="32" alt="Clouds 1"> | Clouds 1 | Soft clouds |
+| <img src="doc/fork/images/icons/node_tg_clouds_2.png" width="32" height="32" alt="Clouds 2"> | Clouds 2 | Clouds with more contrast and detail |
+| <img src="doc/fork/images/icons/node_tg_clouds_3.png" width="32" height="32" alt="Clouds 3"> | Clouds 3 | Swirled detailed clouds |
+| <img src="doc/fork/images/icons/node_tg_plasma.png" width="32" height="32" alt="Plasma"> | Plasma | Clouds folded into bands |
+| <img src="doc/fork/images/icons/node_tg_creased.png" width="32" height="32" alt="Creased"> | Creased | Thin bright folds, like crumpled paper |
+| <img src="doc/fork/images/icons/node_tg_fluid.png" width="32" height="32" alt="Fluid"> | Fluid | Clouds swirled twice, like stirred liquid |
+| <img src="doc/fork/images/icons/node_tg_liquid.png" width="32" height="32" alt="Liquid"> | Liquid | Swirled bands, like marbled paint |
+| <img src="doc/fork/images/icons/node_tg_gaussian_noise.png" width="32" height="32" alt="Gaussian Noise"> | Gaussian Noise | Fine noise that is mostly mid gray |
+| <img src="doc/fork/images/icons/node_tg_white_noise.png" width="32" height="32" alt="White Noise"> | White Noise | A random gray for every pixel |
+| <img src="doc/fork/images/icons/node_tg_white_noise_fast.png" width="32" height="32" alt="White Noise Fast"> | White Noise Fast | A random gray for every square of a grid |
+| <img src="doc/fork/images/icons/node_tg_blue_noise_fast.png" width="32" height="32" alt="Blue Noise Fast"> | Blue Noise Fast | Pixel noise with no clumps |
+| <img src="doc/fork/images/icons/node_tg_anisotropic_noise.png" width="32" height="32" alt="Anisotropic Noise"> | Anisotropic Noise | Noise stretched into long streaks |
+| <img src="doc/fork/images/icons/node_tg_directional_noise_1.png" width="32" height="32" alt="Directional Noise 1"> | Directional Noise 1 | Smooth vertical streaks |
+| <img src="doc/fork/images/icons/node_tg_directional_noise_2.png" width="32" height="32" alt="Directional Noise 2"> | Directional Noise 2 | Detailed vertical streaks |
+| <img src="doc/fork/images/icons/node_tg_directional_noise_3.png" width="32" height="32" alt="Directional Noise 3"> | Directional Noise 3 | Wavy vertical streaks |
+| <img src="doc/fork/images/icons/node_tg_directional_noise_4.png" width="32" height="32" alt="Directional Noise 4"> | Directional Noise 4 | Thin bright vertical lines |
+| <img src="doc/fork/images/icons/node_tg_directional_scratches.png" width="32" height="32" alt="Directional Scratches"> | Directional Scratches | Short scratches that mostly point one way |
+| <img src="doc/fork/images/icons/node_tg_cells_1.png" width="32" height="32" alt="Cells 1"> | Cells 1 | Bright cell centers fading out |
+| <img src="doc/fork/images/icons/node_tg_cells_2.png" width="32" height="32" alt="Cells 2"> | Cells 2 | Cells with dark edges |
+| <img src="doc/fork/images/icons/node_tg_cells_3.png" width="32" height="32" alt="Cells 3"> | Cells 3 | A flat random gray per cell |
+| <img src="doc/fork/images/icons/node_tg_cells_4.png" width="32" height="32" alt="Cells 4"> | Cells 4 | Cells of three sizes on top of each other |
+| <img src="doc/fork/images/icons/node_tg_voronoi.png" width="32" height="32" alt="Voronoi"> | Voronoi | Cells around scattered points |
+| <img src="doc/fork/images/icons/node_tg_voronoi_fractal.png" width="32" height="32" alt="Voronoi Fractal"> | Voronoi Fractal | Cell distances over several sizes |
+| <img src="doc/fork/images/icons/node_tg_crystal_1.png" width="32" height="32" alt="Crystal 1"> | Crystal 1 | Shaded facets, like broken crystal |
+| <img src="doc/fork/images/icons/node_tg_crystal_2.png" width="32" height="32" alt="Crystal 2"> | Crystal 2 | Facets of two sizes |
+| <img src="doc/fork/images/icons/node_tg_caustics.png" width="32" height="32" alt="Caustics"> | Caustics | Bright wavy lines, like light under water |
+| <img src="doc/fork/images/icons/node_tg_microscope_view.png" width="32" height="32" alt="Microscope View"> | Microscope View | Cells with soft walls, like tissue |
+| <img src="doc/fork/images/icons/node_tg_bnw_spots_1.png" width="32" height="32" alt="BnW Spots 1"> | BnW Spots 1 | Black and white blobs |
+| <img src="doc/fork/images/icons/node_tg_bnw_spots_2.png" width="32" height="32" alt="BnW Spots 2"> | BnW Spots 2 | Black and white blobs with rough edges |
+| <img src="doc/fork/images/icons/node_tg_bnw_spots_3.png" width="32" height="32" alt="BnW Spots 3"> | BnW Spots 3 | Scattered black and white blobs |
+| <img src="doc/fork/images/icons/node_tg_gaussian_spots_1.png" width="32" height="32" alt="Gaussian Spots 1"> | Gaussian Spots 1 | Soft round spots |
+| <img src="doc/fork/images/icons/node_tg_gaussian_spots_2.png" width="32" height="32" alt="Gaussian Spots 2"> | Gaussian Spots 2 | Soft round spots of two sizes |
 
 **<img src="doc/fork/images/icons/node_lib_grunge.png" width="32" height="32" alt=""> Texture ▸ Grunge** (30)
 
-| Node | What it does |
-|---|---|
-| Grunge Galvanic Large | Large shaded flakes, like galvanized metal |
-| Grunge Galvanic Small | Small shaded flakes |
-| Grunge Leaks | Streaks running down |
-| Grunge Leaky Paint | Paint patches with drips |
-| Grunge Scratches Fine | Thin scratches |
-| Grunge Scratches Rough | Wide scratches |
-| Grunge Scratches Dirty | Scratches with dirt |
-| Grunge Shavings | Curled shavings |
-| Messy Fibers 1 | Thin tangled fibers |
-| Messy Fibers 2 | Many tangled fibers |
-| Messy Fibers 3 | Thick tangled fibers |
-| Fur 1 | Straight hairs |
-| Fur 2 | Wavy hairs |
-| Fur 3 | Short fine hairs |
-| Waveform 1 | Bars of random height, like a sound wave |
-| Dirt Gradient | Dirt that gathers toward the bottom |
-| Grunge Concrete | Pitted concrete |
-| Grunge Damas | Swirled worn patches |
-| Grunge Rough Dirty | Rough dirt with specks |
-| Grunge Rust Fine | Fine rust |
-| Grunge Spots | Scattered spots |
-| Grunge Spots Dirty | Spots with dirt |
-| Grunge Splashes Dusty | Splashes and dust |
-| Moisture Noise 1 | Soft damp patches |
-| Moisture Noise 2 | Damp patches with grain |
-| Dirt 1 | Soft dirt |
-| Dirt 2 | Specks of dirt |
-| Dirt 3 | Streaky dirt |
-| Dirt 4 | Dirt in cracks |
-| Dirt 5 | Swirled dirt with spots |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_grunge_galvanic_large.png" width="32" height="32" alt="Grunge Galvanic Large"> | Grunge Galvanic Large | Large shaded flakes, like galvanized metal |
+| <img src="doc/fork/images/icons/node_tg_grunge_galvanic_small.png" width="32" height="32" alt="Grunge Galvanic Small"> | Grunge Galvanic Small | Small shaded flakes |
+| <img src="doc/fork/images/icons/node_tg_grunge_leaks.png" width="32" height="32" alt="Grunge Leaks"> | Grunge Leaks | Streaks running down |
+| <img src="doc/fork/images/icons/node_tg_grunge_leaky_paint.png" width="32" height="32" alt="Grunge Leaky Paint"> | Grunge Leaky Paint | Paint patches with drips |
+| <img src="doc/fork/images/icons/node_tg_grunge_scratches_fine.png" width="32" height="32" alt="Grunge Scratches Fine"> | Grunge Scratches Fine | Thin scratches |
+| <img src="doc/fork/images/icons/node_tg_grunge_scratches_rough.png" width="32" height="32" alt="Grunge Scratches Rough"> | Grunge Scratches Rough | Wide scratches |
+| <img src="doc/fork/images/icons/node_tg_grunge_scratches_dirty.png" width="32" height="32" alt="Grunge Scratches Dirty"> | Grunge Scratches Dirty | Scratches with dirt |
+| <img src="doc/fork/images/icons/node_tg_grunge_shavings.png" width="32" height="32" alt="Grunge Shavings"> | Grunge Shavings | Curled shavings |
+| <img src="doc/fork/images/icons/node_tg_messy_fibers_1.png" width="32" height="32" alt="Messy Fibers 1"> | Messy Fibers 1 | Thin tangled fibers |
+| <img src="doc/fork/images/icons/node_tg_messy_fibers_2.png" width="32" height="32" alt="Messy Fibers 2"> | Messy Fibers 2 | Many tangled fibers |
+| <img src="doc/fork/images/icons/node_tg_messy_fibers_3.png" width="32" height="32" alt="Messy Fibers 3"> | Messy Fibers 3 | Thick tangled fibers |
+| <img src="doc/fork/images/icons/node_tg_fur_1.png" width="32" height="32" alt="Fur 1"> | Fur 1 | Straight hairs |
+| <img src="doc/fork/images/icons/node_tg_fur_2.png" width="32" height="32" alt="Fur 2"> | Fur 2 | Wavy hairs |
+| <img src="doc/fork/images/icons/node_tg_fur_3.png" width="32" height="32" alt="Fur 3"> | Fur 3 | Short fine hairs |
+| <img src="doc/fork/images/icons/node_tg_waveform_1.png" width="32" height="32" alt="Waveform 1"> | Waveform 1 | Bars of random height, like a sound wave |
+| <img src="doc/fork/images/icons/node_tg_dirt_gradient.png" width="32" height="32" alt="Dirt Gradient"> | Dirt Gradient | Dirt that gathers toward the bottom |
+| <img src="doc/fork/images/icons/node_tg_grunge_concrete.png" width="32" height="32" alt="Grunge Concrete"> | Grunge Concrete | Pitted concrete |
+| <img src="doc/fork/images/icons/node_tg_grunge_damas.png" width="32" height="32" alt="Grunge Damas"> | Grunge Damas | Swirled worn patches |
+| <img src="doc/fork/images/icons/node_tg_grunge_rough_dirty.png" width="32" height="32" alt="Grunge Rough Dirty"> | Grunge Rough Dirty | Rough dirt with specks |
+| <img src="doc/fork/images/icons/node_tg_grunge_rust_fine.png" width="32" height="32" alt="Grunge Rust Fine"> | Grunge Rust Fine | Fine rust |
+| <img src="doc/fork/images/icons/node_tg_grunge_spots.png" width="32" height="32" alt="Grunge Spots"> | Grunge Spots | Scattered spots |
+| <img src="doc/fork/images/icons/node_tg_grunge_spots_dirty.png" width="32" height="32" alt="Grunge Spots Dirty"> | Grunge Spots Dirty | Spots with dirt |
+| <img src="doc/fork/images/icons/node_tg_grunge_splashes_dusty.png" width="32" height="32" alt="Grunge Splashes Dusty"> | Grunge Splashes Dusty | Splashes and dust |
+| <img src="doc/fork/images/icons/node_tg_moisture_noise_1.png" width="32" height="32" alt="Moisture Noise 1"> | Moisture Noise 1 | Soft damp patches |
+| <img src="doc/fork/images/icons/node_tg_moisture_noise_2.png" width="32" height="32" alt="Moisture Noise 2"> | Moisture Noise 2 | Damp patches with grain |
+| <img src="doc/fork/images/icons/node_tg_dirt_1.png" width="32" height="32" alt="Dirt 1"> | Dirt 1 | Soft dirt |
+| <img src="doc/fork/images/icons/node_tg_dirt_2.png" width="32" height="32" alt="Dirt 2"> | Dirt 2 | Specks of dirt |
+| <img src="doc/fork/images/icons/node_tg_dirt_3.png" width="32" height="32" alt="Dirt 3"> | Dirt 3 | Streaky dirt |
+| <img src="doc/fork/images/icons/node_tg_dirt_4.png" width="32" height="32" alt="Dirt 4"> | Dirt 4 | Dirt in cracks |
+| <img src="doc/fork/images/icons/node_tg_dirt_5.png" width="32" height="32" alt="Dirt 5"> | Dirt 5 | Swirled dirt with spots |
 
 **<img src="doc/fork/images/icons/node_lib_grunge_maps.png" width="32" height="32" alt=""> Texture ▸ Grunge Maps** (15)
 
-| Node | What it does |
-|---|---|
-| Grunge Map 001 to 015 | Fifteen ready-made grunge masks |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_grunge_map_001.png" width="32" height="32" alt="Grunge Map 001"> | Grunge Map 001 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_002.png" width="32" height="32" alt="Grunge Map 002"> | Grunge Map 002 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_003.png" width="32" height="32" alt="Grunge Map 003"> | Grunge Map 003 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_004.png" width="32" height="32" alt="Grunge Map 004"> | Grunge Map 004 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_005.png" width="32" height="32" alt="Grunge Map 005"> | Grunge Map 005 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_006.png" width="32" height="32" alt="Grunge Map 006"> | Grunge Map 006 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_007.png" width="32" height="32" alt="Grunge Map 007"> | Grunge Map 007 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_008.png" width="32" height="32" alt="Grunge Map 008"> | Grunge Map 008 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_009.png" width="32" height="32" alt="Grunge Map 009"> | Grunge Map 009 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_010.png" width="32" height="32" alt="Grunge Map 010"> | Grunge Map 010 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_011.png" width="32" height="32" alt="Grunge Map 011"> | Grunge Map 011 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_012.png" width="32" height="32" alt="Grunge Map 012"> | Grunge Map 012 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_013.png" width="32" height="32" alt="Grunge Map 013"> | Grunge Map 013 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_014.png" width="32" height="32" alt="Grunge Map 014"> | Grunge Map 014 | A ready-made grunge mask |
+| <img src="doc/fork/images/icons/node_tg_grunge_map_015.png" width="32" height="32" alt="Grunge Map 015"> | Grunge Map 015 | A ready-made grunge mask |
 
 **<img src="doc/fork/images/icons/node_lib_patterns.png" width="32" height="32" alt=""> Texture ▸ Patterns** (16)
 
-| Node | What it does |
-|---|---|
-| Alveolus | Rounded cells in a honeycomb |
-| Brick 1 | Bricks twice as wide as high |
-| Brick 2 | Long thin bricks in a stepped bond |
-| Brick Generator | Bricks with full control over their layout and bevel |
-| Checker 1 | A black and white checkerboard |
-| Stripes | Parallel stripes that can lean |
-| Fibers 1 | Thin strands woven over and under |
-| Fibers 2 | Thicker strands woven over and under |
-| Mesh 1 | Thin bars woven over and under |
-| Mesh 2 | Wide blocks woven over and under |
-| Weave 1 | Threads woven over and under |
-| Weave 2 | A weave with stitches swapped at random |
-| Weave Generator | A weave with control over its blocks and threads |
-| Gaussian 1 | A grid of soft blobs |
-| Gaussian 2 | Soft blobs in staggered rows |
-| Triangle Grid | A grid of jittered triangles seen from above |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_alveolus.png" width="32" height="32" alt="Alveolus"> | Alveolus | Rounded cells in a honeycomb |
+| <img src="doc/fork/images/icons/node_tg_brick_1.png" width="32" height="32" alt="Brick 1"> | Brick 1 | Bricks twice as wide as high |
+| <img src="doc/fork/images/icons/node_tg_brick_2.png" width="32" height="32" alt="Brick 2"> | Brick 2 | Long thin bricks in a stepped bond |
+| <img src="doc/fork/images/icons/node_tg_brick_generator.png" width="32" height="32" alt="Brick Generator"> | Brick Generator | Bricks with full control over their layout and bevel |
+| <img src="doc/fork/images/icons/node_tg_checker_1.png" width="32" height="32" alt="Checker 1"> | Checker 1 | A black and white checkerboard |
+| <img src="doc/fork/images/icons/node_tg_stripes.png" width="32" height="32" alt="Stripes"> | Stripes | Parallel stripes that can lean |
+| <img src="doc/fork/images/icons/node_tg_fibers_1.png" width="32" height="32" alt="Fibers 1"> | Fibers 1 | Thin strands woven over and under |
+| <img src="doc/fork/images/icons/node_tg_fibers_2.png" width="32" height="32" alt="Fibers 2"> | Fibers 2 | Thicker strands woven over and under |
+| <img src="doc/fork/images/icons/node_tg_mesh_1.png" width="32" height="32" alt="Mesh 1"> | Mesh 1 | Thin bars woven over and under |
+| <img src="doc/fork/images/icons/node_tg_mesh_2.png" width="32" height="32" alt="Mesh 2"> | Mesh 2 | Wide blocks woven over and under |
+| <img src="doc/fork/images/icons/node_tg_weave_1.png" width="32" height="32" alt="Weave 1"> | Weave 1 | Threads woven over and under |
+| <img src="doc/fork/images/icons/node_tg_weave_2.png" width="32" height="32" alt="Weave 2"> | Weave 2 | A weave with stitches swapped at random |
+| <img src="doc/fork/images/icons/node_tg_weave_generator.png" width="32" height="32" alt="Weave Generator"> | Weave Generator | A weave with control over its blocks and threads |
+| <img src="doc/fork/images/icons/node_tg_gaussian_1.png" width="32" height="32" alt="Gaussian 1"> | Gaussian 1 | A grid of soft blobs |
+| <img src="doc/fork/images/icons/node_tg_gaussian_2.png" width="32" height="32" alt="Gaussian 2"> | Gaussian 2 | Soft blobs in staggered rows |
+| <img src="doc/fork/images/icons/node_tg_triangle_grid.png" width="32" height="32" alt="Triangle Grid"> | Triangle Grid | A grid of jittered triangles seen from above |
 
 **<img src="doc/fork/images/icons/node_lib_gradients.png" width="32" height="32" alt=""> Texture ▸ Gradients** (7)
 
-| Node | What it does |
-|---|---|
-| Gradient Linear 1 | A plain ramp from black to white |
-| Gradient Linear 2 | A rounded ramp up and down again, like a pipe |
-| Gradient Linear 3 | A straight ramp up and down again |
-| Gradient Axial | A ramp from one point to another |
-| Gradient Axial Reflected | A ramp to white and back between two points |
-| Gradient Circular | A ramp that sweeps around a point |
-| Gradient Radial | A fade from a center out to a radius |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_gradient_linear_1.png" width="32" height="32" alt="Gradient Linear 1"> | Gradient Linear 1 | A plain ramp from black to white |
+| <img src="doc/fork/images/icons/node_tg_gradient_linear_2.png" width="32" height="32" alt="Gradient Linear 2"> | Gradient Linear 2 | A rounded ramp up and down again, like a pipe |
+| <img src="doc/fork/images/icons/node_tg_gradient_linear_3.png" width="32" height="32" alt="Gradient Linear 3"> | Gradient Linear 3 | A straight ramp up and down again |
+| <img src="doc/fork/images/icons/node_tg_gradient_axial.png" width="32" height="32" alt="Gradient Axial"> | Gradient Axial | A ramp from one point to another |
+| <img src="doc/fork/images/icons/node_tg_gradient_axial_reflected.png" width="32" height="32" alt="Gradient Axial Reflected"> | Gradient Axial Reflected | A ramp to white and back between two points |
+| <img src="doc/fork/images/icons/node_tg_gradient_circular.png" width="32" height="32" alt="Gradient Circular"> | Gradient Circular | A ramp that sweeps around a point |
+| <img src="doc/fork/images/icons/node_tg_gradient_radial.png" width="32" height="32" alt="Gradient Radial"> | Gradient Radial | A fade from a center out to a radius |
 
 **<img src="doc/fork/images/icons/node_lib_shapes.png" width="32" height="32" alt=""> Texture ▸ Shapes** (8)
 
-| Node | What it does |
-|---|---|
-| Shape | One of the built-in shapes, optionally repeated |
-| Polygon 1 | A polygon made of slices that can be pulled apart |
-| Polygon 2 | A polygon filled with a ramp from the edges to the center |
-| Star | A star |
-| Starburst | Rays shooting out from the center |
-| Shape Extrude | Push a shape out into a solid, turn it and see its height from above |
-| Height Extrude | Raise a height into a solid and see it from a turned camera |
-| Panorama Shape | Place a light panel in a panorama |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_shape.png" width="32" height="32" alt="Shape"> | Shape | One of the built-in shapes, optionally repeated |
+| <img src="doc/fork/images/icons/node_tg_polygon_1.png" width="32" height="32" alt="Polygon 1"> | Polygon 1 | A polygon made of slices that can be pulled apart |
+| <img src="doc/fork/images/icons/node_tg_polygon_2.png" width="32" height="32" alt="Polygon 2"> | Polygon 2 | A polygon filled with a ramp from the edges to the center |
+| <img src="doc/fork/images/icons/node_tg_star.png" width="32" height="32" alt="Star"> | Star | A star |
+| <img src="doc/fork/images/icons/node_tg_starburst.png" width="32" height="32" alt="Starburst"> | Starburst | Rays shooting out from the center |
+| <img src="doc/fork/images/icons/node_tg_shape_extrude.png" width="32" height="32" alt="Shape Extrude"> | Shape Extrude | Push a shape out into a solid, turn it and see its height from above |
+| <img src="doc/fork/images/icons/node_tg_height_extrude.png" width="32" height="32" alt="Height Extrude"> | Height Extrude | Raise a height into a solid and see it from a turned camera |
+| <img src="doc/fork/images/icons/node_tg_panorama_shape.png" width="32" height="32" alt="Panorama Shape"> | Panorama Shape | Place a light panel in a panorama |
 
 **<img src="doc/fork/images/icons/node_lib_scatter.png" width="32" height="32" alt=""> Texture ▸ Scatter** (13)
 
-| Node | What it does |
-|---|---|
-| Tile Generator | Lay out a grid of shapes or images |
-| Tile Sampler | Lay out a grid of shapes or images, with maps that change every tile |
-| Tile Random | Tiles split at random into smaller tiles |
-| Tile Random 2 | Rows of shapes of random width and height, touching each other |
-| Splatter | Stamp an image many times, scattered and turned |
-| Splatter Circular | Place shapes or images on rings |
-| Arc Pavement | Stones laid in fans of arcs |
-| Shape Mapper | Wrap an image around a circle or polygon |
-| Scratches Generator | Scatter wavy scratches |
-| Shape Splatter | Scatter shapes over a height, with data to make matching maps |
-| Shape Splatter Blend | Color the shapes of a Shape Splatter, each with its own pattern |
-| Shape Splatter Data Extract | Split the data of a Shape Splatter into separate maps |
-| Shape Splatter to Mask | A mask of chosen shapes of a Shape Splatter |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_tile_generator.png" width="32" height="32" alt="Tile Generator"> | Tile Generator | Lay out a grid of shapes or images |
+| <img src="doc/fork/images/icons/node_tg_tile_sampler.png" width="32" height="32" alt="Tile Sampler"> | Tile Sampler | Lay out a grid of shapes or images, with maps that change every tile |
+| <img src="doc/fork/images/icons/node_tg_tile_random.png" width="32" height="32" alt="Tile Random"> | Tile Random | Tiles split at random into smaller tiles |
+| <img src="doc/fork/images/icons/node_tg_tile_random_2.png" width="32" height="32" alt="Tile Random 2"> | Tile Random 2 | Rows of shapes of random width and height, touching each other |
+| <img src="doc/fork/images/icons/node_tg_splatter.png" width="32" height="32" alt="Splatter"> | Splatter | Stamp an image many times, scattered and turned |
+| <img src="doc/fork/images/icons/node_tg_splatter_circular.png" width="32" height="32" alt="Splatter Circular"> | Splatter Circular | Place shapes or images on rings |
+| <img src="doc/fork/images/icons/node_tg_arc_pavement.png" width="32" height="32" alt="Arc Pavement"> | Arc Pavement | Stones laid in fans of arcs |
+| <img src="doc/fork/images/icons/node_tg_shape_mapper.png" width="32" height="32" alt="Shape Mapper"> | Shape Mapper | Wrap an image around a circle or polygon |
+| <img src="doc/fork/images/icons/node_tg_scratches_generator.png" width="32" height="32" alt="Scratches Generator"> | Scratches Generator | Scatter wavy scratches |
+| <img src="doc/fork/images/icons/node_tg_shape_splatter.png" width="32" height="32" alt="Shape Splatter"> | Shape Splatter | Scatter shapes over a height, with data to make matching maps |
+| <img src="doc/fork/images/icons/node_tg_shape_splatter_blend.png" width="32" height="32" alt="Shape Splatter Blend"> | Shape Splatter Blend | Color the shapes of a Shape Splatter, each with its own pattern |
+| <img src="doc/fork/images/icons/node_tg_shape_splatter_data_extract.png" width="32" height="32" alt="Shape Splatter Data Extract"> | Shape Splatter Data Extract | Split the data of a Shape Splatter into separate maps |
+| <img src="doc/fork/images/icons/node_tg_shape_splatter_to_mask.png" width="32" height="32" alt="Shape Splatter to Mask"> | Shape Splatter to Mask | A mask of chosen shapes of a Shape Splatter |
 
 **<img src="doc/fork/images/icons/node_lib_stone.png" width="32" height="32" alt=""> Texture ▸ Stone** (3)
 
-| Node | What it does |
-|---|---|
-| Stone Wall | Walls of stones laid in courses or cells, with mortar between them |
-| Fitted Wall | Walls of stones cut to fit their neighbors |
-| Packed Wall | Walls of stones stacked one by one |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_stone_wall.png" width="32" height="32" alt="Stone Wall"> | Stone Wall | Walls of stones laid in courses or cells, with mortar between them |
+| <img src="doc/fork/images/icons/node_tg_fitted_wall.png" width="32" height="32" alt="Fitted Wall"> | Fitted Wall | Walls of stones cut to fit their neighbors |
+| <img src="doc/fork/images/icons/node_tg_packed_wall.png" width="32" height="32" alt="Packed Wall"> | Packed Wall | Walls of stones stacked one by one |
 
 **<img src="doc/fork/images/icons/node_lib_color.png" width="32" height="32" alt=""> Color** (9)
 
-| Node | What it does |
-|---|---|
-| Blend | Combine a foreground with a background, with a blend mode, opacity, mask and crop area |
-| Height Blend | Lay one height on another, the top shows where it stands higher |
-| Linear Burn | Darken by adding both images and taking away white |
-| Dissolve | Blend two images by taking random pixels from the foreground |
-| Channel Shuffle | Pick each channel of the color from any channel of two images |
-| Channel Mixer | Build each channel from a mix of the red, green and blue channels |
-| Grayscale Conversion | Turn a color image gray, choosing how |
-| Chrominance Extract | Keep only the color of an image, without its brightness |
-| Color To Mask | White where the image is close to a color |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_blend.png" width="32" height="32" alt="Blend"> | Blend | Combine a foreground with a background, with a blend mode, opacity, mask and crop area |
+| <img src="doc/fork/images/icons/node_tg_height_blend.png" width="32" height="32" alt="Height Blend"> | Height Blend | Lay one height on another, the top shows where it stands higher |
+| <img src="doc/fork/images/icons/node_tg_linear_burn.png" width="32" height="32" alt="Linear Burn"> | Linear Burn | Darken by adding both images and taking away white |
+| <img src="doc/fork/images/icons/node_tg_dissolve.png" width="32" height="32" alt="Dissolve"> | Dissolve | Blend two images by taking random pixels from the foreground |
+| <img src="doc/fork/images/icons/node_tg_channel_shuffle.png" width="32" height="32" alt="Channel Shuffle"> | Channel Shuffle | Pick each channel of the color from any channel of two images |
+| <img src="doc/fork/images/icons/node_tg_channel_mixer.png" width="32" height="32" alt="Channel Mixer"> | Channel Mixer | Build each channel from a mix of the red, green and blue channels |
+| <img src="doc/fork/images/icons/node_tg_grayscale_conversion.png" width="32" height="32" alt="Grayscale Conversion"> | Grayscale Conversion | Turn a color image gray, choosing how |
+| <img src="doc/fork/images/icons/node_tg_chrominance_extract.png" width="32" height="32" alt="Chrominance Extract"> | Chrominance Extract | Keep only the color of an image, without its brightness |
+| <img src="doc/fork/images/icons/node_tg_color_to_mask.png" width="32" height="32" alt="Color To Mask"> | Color To Mask | White where the image is close to a color |
 
 **<img src="doc/fork/images/icons/node_lib_adjust.png" width="32" height="32" alt=""> Color ▸ Adjust** (8)
 
-| Node | What it does |
-|---|---|
-| Levels | Remap the value range of an image, with a gamma curve for the midtones |
-| Contrast/Luminosity | Change the contrast and brightness |
-| Replace Color | Shift all colors so one color becomes another |
-| Replace Color Range | Replace one color and the colors close to it |
-| Color Match | Shift the colors so a source color becomes a target color |
-| Hald CLUT | Grade the colors with a Hald look-up image |
-| Quantize Color (Simple) | Snap each channel to a few even steps |
-| HDR Range Viewer | Show where values go below 0 or above 1 |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_levels.png" width="32" height="32" alt="Levels"> | Levels | Remap the value range of an image, with a gamma curve for the midtones |
+| <img src="doc/fork/images/icons/node_tg_contrast_luminosity.png" width="32" height="32" alt="Contrast/Luminosity"> | Contrast/Luminosity | Change the contrast and brightness |
+| <img src="doc/fork/images/icons/node_tg_replace_color.png" width="32" height="32" alt="Replace Color"> | Replace Color | Shift all colors so one color becomes another |
+| <img src="doc/fork/images/icons/node_tg_replace_color_range.png" width="32" height="32" alt="Replace Color Range"> | Replace Color Range | Replace one color and the colors close to it |
+| <img src="doc/fork/images/icons/node_tg_color_match.png" width="32" height="32" alt="Color Match"> | Color Match | Shift the colors so a source color becomes a target color |
+| <img src="doc/fork/images/icons/node_tg_hald_clut.png" width="32" height="32" alt="Hald CLUT"> | Hald CLUT | Grade the colors with a Hald look-up image |
+| <img src="doc/fork/images/icons/node_tg_quantize_color_simple.png" width="32" height="32" alt="Quantize Color (Simple)"> | Quantize Color (Simple) | Snap each channel to a few even steps |
+| <img src="doc/fork/images/icons/node_tg_hdr_range_viewer.png" width="32" height="32" alt="HDR Range Viewer"> | HDR Range Viewer | Show where values go below 0 or above 1 |
 
 **<img src="doc/fork/images/icons/node_lib_histogram.png" width="32" height="32" alt=""> Color ▸ Histogram** (12)
 
-| Node | What it does |
-|---|---|
-| Auto Levels | Stretch the values so the darkest is black and the brightest white |
-| Histogram Equalize | Spread the values evenly over the whole range |
-| Histogram Range | Squeeze the values into a smaller range and move it |
-| Histogram Shift | Shift all values, wrapping the ones past 1 back to 0 |
-| Histogram Scan | Turn values into a mask by sliding a soft step through them |
-| Non-Uniform Histogram Scan | Histogram Scan with a position and contrast that change per pixel |
-| Histogram Select | White where values are within a band, fading out around it |
-| Threshold | Turn values black or white by comparing them to a threshold |
-| Quantize Grayscale | Snap values to a few steps, like terraces |
-| Histogram Compute | Count the values of an image into a row of pixels |
-| Histogram Render | Draw the histogram of an image as a chart |
-| Min Max | Find the lowest and highest value of an image |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_auto_levels.png" width="32" height="32" alt="Auto Levels"> | Auto Levels | Stretch the values so the darkest is black and the brightest white |
+| <img src="doc/fork/images/icons/node_tg_histogram_equalize.png" width="32" height="32" alt="Histogram Equalize"> | Histogram Equalize | Spread the values evenly over the whole range |
+| <img src="doc/fork/images/icons/node_tg_histogram_range.png" width="32" height="32" alt="Histogram Range"> | Histogram Range | Squeeze the values into a smaller range and move it |
+| <img src="doc/fork/images/icons/node_tg_histogram_shift.png" width="32" height="32" alt="Histogram Shift"> | Histogram Shift | Shift all values, wrapping the ones past 1 back to 0 |
+| <img src="doc/fork/images/icons/node_tg_histogram_scan.png" width="32" height="32" alt="Histogram Scan"> | Histogram Scan | Turn values into a mask by sliding a soft step through them |
+| <img src="doc/fork/images/icons/node_tg_histogram_scan_non_uniform.png" width="32" height="32" alt="Non-Uniform Histogram Scan"> | Non-Uniform Histogram Scan | Histogram Scan with a position and contrast that change per pixel |
+| <img src="doc/fork/images/icons/node_tg_histogram_select.png" width="32" height="32" alt="Histogram Select"> | Histogram Select | White where values are within a band, fading out around it |
+| <img src="doc/fork/images/icons/node_tg_threshold.png" width="32" height="32" alt="Threshold"> | Threshold | Turn values black or white by comparing them to a threshold |
+| <img src="doc/fork/images/icons/node_tg_quantize_grayscale.png" width="32" height="32" alt="Quantize Grayscale"> | Quantize Grayscale | Snap values to a few steps, like terraces |
+| <img src="doc/fork/images/icons/node_tg_histogram_compute.png" width="32" height="32" alt="Histogram Compute"> | Histogram Compute | Count the values of an image into a row of pixels |
+| <img src="doc/fork/images/icons/node_tg_histogram_render.png" width="32" height="32" alt="Histogram Render"> | Histogram Render | Draw the histogram of an image as a chart |
+| <img src="doc/fork/images/icons/node_tg_min_max.png" width="32" height="32" alt="Min Max"> | Min Max | Find the lowest and highest value of an image |
 
 **<img src="doc/fork/images/icons/node_lib_palette.png" width="32" height="32" alt=""> Color ▸ Palette** (6)
 
-| Node | What it does |
-|---|---|
-| Quantize Color | Reduce an image to a few colors, with an ID map and a palette |
-| Create Color Palette | Make a palette from up to 16 colors, or add them to another palette |
-| Modify Color Palette | Change one palette color, and the ones close to it |
-| Apply Color Palette | Color an ID map with the colors of a palette |
-| View Color Palette | Show a palette as a grid of color swatches |
-| ID to Mask | White where an ID map has the chosen IDs |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_quantize_color.png" width="32" height="32" alt="Quantize Color"> | Quantize Color | Reduce an image to a few colors, with an ID map and a palette |
+| <img src="doc/fork/images/icons/node_tg_create_palette.png" width="32" height="32" alt="Create Color Palette"> | Create Color Palette | Make a palette from up to 16 colors, or add them to another palette |
+| <img src="doc/fork/images/icons/node_tg_modify_palette.png" width="32" height="32" alt="Modify Color Palette"> | Modify Color Palette | Change one palette color, and the ones close to it |
+| <img src="doc/fork/images/icons/node_tg_apply_palette.png" width="32" height="32" alt="Apply Color Palette"> | Apply Color Palette | Color an ID map with the colors of a palette |
+| <img src="doc/fork/images/icons/node_tg_view_palette.png" width="32" height="32" alt="View Color Palette"> | View Color Palette | Show a palette as a grid of color swatches |
+| <img src="doc/fork/images/icons/node_tg_id_to_mask.png" width="32" height="32" alt="ID to Mask"> | ID to Mask | White where an ID map has the chosen IDs |
 
 **<img src="doc/fork/images/icons/node_lib_filter.png" width="32" height="32" alt=""> Filter** (11)
 
-| Node | What it does |
-|---|---|
-| Edge Detect | White shapes with sharp black gaps wherever the gray changes |
-| Non Uniform Edge Detect | Edge Detect with a different gap width for each shape |
-| Height to Normal | Make a tangent-space normal map from a grayscale height image |
-| Distance | Make a gradient around the white parts of a mask and spread colors out from them |
-| Emboss | Shade an image as if a height image were lit from one side |
-| Sharpen | Make edges in an image crisper |
-| Highpass | Keep the fine detail and flatten the broad shapes to middle gray |
-| Luminance Highpass | Remove baked lighting from the brightness only, keeping the colors |
-| Lighting Cancel High Frequencies | Remove small shading details while keeping the colors |
-| Lighting Cancel Low Frequencies | Even out broad light and shadow while keeping the colors |
-| Height Map Frequencies Mapper | Split a height map into broad shapes and fine detail |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_edge_detect.png" width="32" height="32" alt="Edge Detect"> | Edge Detect | White shapes with sharp black gaps wherever the gray changes |
+| <img src="doc/fork/images/icons/node_tg_non_uniform_edge_detect.png" width="32" height="32" alt="Non Uniform Edge Detect"> | Non Uniform Edge Detect | Edge Detect with a different gap width for each shape |
+| <img src="doc/fork/images/icons/node_tg_height_to_normal.png" width="32" height="32" alt="Height to Normal"> | Height to Normal | Make a tangent-space normal map from a grayscale height image |
+| <img src="doc/fork/images/icons/node_tg_distance.png" width="32" height="32" alt="Distance"> | Distance | Make a gradient around the white parts of a mask and spread colors out from them |
+| <img src="doc/fork/images/icons/node_tg_emboss.png" width="32" height="32" alt="Emboss"> | Emboss | Shade an image as if a height image were lit from one side |
+| <img src="doc/fork/images/icons/node_tg_sharpen.png" width="32" height="32" alt="Sharpen"> | Sharpen | Make edges in an image crisper |
+| <img src="doc/fork/images/icons/node_tg_highpass.png" width="32" height="32" alt="Highpass"> | Highpass | Keep the fine detail and flatten the broad shapes to middle gray |
+| <img src="doc/fork/images/icons/node_tg_luminance_highpass.png" width="32" height="32" alt="Luminance Highpass"> | Luminance Highpass | Remove baked lighting from the brightness only, keeping the colors |
+| <img src="doc/fork/images/icons/node_tg_lighting_cancel_high.png" width="32" height="32" alt="Lighting Cancel High Frequencies"> | Lighting Cancel High Frequencies | Remove small shading details while keeping the colors |
+| <img src="doc/fork/images/icons/node_tg_lighting_cancel_low.png" width="32" height="32" alt="Lighting Cancel Low Frequencies"> | Lighting Cancel Low Frequencies | Even out broad light and shadow while keeping the colors |
+| <img src="doc/fork/images/icons/node_tg_height_frequencies.png" width="32" height="32" alt="Height Map Frequencies Mapper"> | Height Map Frequencies Mapper | Split a height map into broad shapes and fine detail |
 
 **<img src="doc/fork/images/icons/node_lib_effects.png" width="32" height="32" alt=""> Filter ▸ Effects** (14)
 
-| Node | What it does |
-|---|---|
-| Ambient Occlusion | Darken the parts of a height that the sky can not reach |
-| Bevel | Slope the edges of shapes into a height and normal map |
-| Cross Section | Show the profile of one line through a height |
-| Shadows | Cast the shadows of a height lit from one side |
-| Curvature | Find the bends of a normal map |
-| Curvature Smooth | Find the bends of a normal map at several sizes |
-| Curvature Sobel | Find the bends of a normal map with a Sobel filter |
-| Diffusion Color | Spread the colors under a mask over the rest of the image |
-| Diffusion Grayscale | Spread the values under a mask over the rest of the image |
-| Diffusion UV | Spread a UV map under a mask over the rest of the image, across its seams |
-| Emboss With Gloss | Shade an image by a height, with a shine on the lit side |
-| Uber Emboss | Light an image as a surface shaped by a height |
-| Mosaic | Break an image into flat colored tiles |
-| Summed Area Table | Sum the pixels below and left of each pixel |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_ambient_occlusion.png" width="32" height="32" alt="Ambient Occlusion"> | Ambient Occlusion | Darken the parts of a height that the sky can not reach |
+| <img src="doc/fork/images/icons/node_tg_bevel.png" width="32" height="32" alt="Bevel"> | Bevel | Slope the edges of shapes into a height and normal map |
+| <img src="doc/fork/images/icons/node_tg_cross_section.png" width="32" height="32" alt="Cross Section"> | Cross Section | Show the profile of one line through a height |
+| <img src="doc/fork/images/icons/node_tg_shadows.png" width="32" height="32" alt="Shadows"> | Shadows | Cast the shadows of a height lit from one side |
+| <img src="doc/fork/images/icons/node_tg_curvature.png" width="32" height="32" alt="Curvature"> | Curvature | Find the bends of a normal map |
+| <img src="doc/fork/images/icons/node_tg_curvature_smooth.png" width="32" height="32" alt="Curvature Smooth"> | Curvature Smooth | Find the bends of a normal map at several sizes |
+| <img src="doc/fork/images/icons/node_tg_curvature_sobel.png" width="32" height="32" alt="Curvature Sobel"> | Curvature Sobel | Find the bends of a normal map with a Sobel filter |
+| <img src="doc/fork/images/icons/node_tg_diffusion_color.png" width="32" height="32" alt="Diffusion Color"> | Diffusion Color | Spread the colors under a mask over the rest of the image |
+| <img src="doc/fork/images/icons/node_tg_diffusion_grayscale.png" width="32" height="32" alt="Diffusion Grayscale"> | Diffusion Grayscale | Spread the values under a mask over the rest of the image |
+| <img src="doc/fork/images/icons/node_tg_diffusion_uv.png" width="32" height="32" alt="Diffusion UV"> | Diffusion UV | Spread a UV map under a mask over the rest of the image, across its seams |
+| <img src="doc/fork/images/icons/node_tg_emboss_with_gloss.png" width="32" height="32" alt="Emboss With Gloss"> | Emboss With Gloss | Shade an image by a height, with a shine on the lit side |
+| <img src="doc/fork/images/icons/node_tg_uber_emboss.png" width="32" height="32" alt="Uber Emboss"> | Uber Emboss | Light an image as a surface shaped by a height |
+| <img src="doc/fork/images/icons/node_tg_mosaic.png" width="32" height="32" alt="Mosaic"> | Mosaic | Break an image into flat colored tiles |
+| <img src="doc/fork/images/icons/node_tg_summed_area_table.png" width="32" height="32" alt="Summed Area Table"> | Summed Area Table | Sum the pixels below and left of each pixel |
 
 **<img src="doc/fork/images/icons/node_lib_shape_effects.png" width="32" height="32" alt=""> Filter ▸ Shape Effects** (4)
 
-| Node | What it does |
-|---|---|
-| Extend Shape | Grow shapes outward, keeping the colors of their edges |
-| Shape Drop Shadow | Put a soft shadow under shapes |
-| Shape Glow | Make shapes glow around or inside their edges |
-| Shape Stroke | Draw a line along the edges of shapes |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_extend_shape.png" width="32" height="32" alt="Extend Shape"> | Extend Shape | Grow shapes outward, keeping the colors of their edges |
+| <img src="doc/fork/images/icons/node_tg_shape_drop_shadow.png" width="32" height="32" alt="Shape Drop Shadow"> | Shape Drop Shadow | Put a soft shadow under shapes |
+| <img src="doc/fork/images/icons/node_tg_shape_glow.png" width="32" height="32" alt="Shape Glow"> | Shape Glow | Make shapes glow around or inside their edges |
+| <img src="doc/fork/images/icons/node_tg_shape_stroke.png" width="32" height="32" alt="Shape Stroke"> | Shape Stroke | Draw a line along the edges of shapes |
 
 **<img src="doc/fork/images/icons/node_lib_flood_fill.png" width="32" height="32" alt=""> Filter ▸ Flood Fill** (9)
 
-| Node | What it does |
-|---|---|
-| Flood Fill | Find the separate shapes of a mask and their boxes |
-| Flood Fill Mapper | Fit a pattern into the box of every shape |
-| Flood Fill to BBox Size | Fill each shape with the size of its box |
-| Flood Fill to Color | Fill each shape with the color under its middle |
-| Flood Fill to Gradient | Fill each shape with a ramp |
-| Flood Fill to Index | Number the shapes from bottom to top |
-| Flood Fill to Position | Fill each shape with the position of its middle |
-| Flood Fill to Random Color | Fill each shape with a random color |
-| Flood Fill to Random Grayscale | Fill each shape with a random gray |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_flood_fill.png" width="32" height="32" alt="Flood Fill"> | Flood Fill | Find the separate shapes of a mask and their boxes |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_mapper.png" width="32" height="32" alt="Flood Fill Mapper"> | Flood Fill Mapper | Fit a pattern into the box of every shape |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_bbox_size.png" width="32" height="32" alt="Flood Fill to BBox Size"> | Flood Fill to BBox Size | Fill each shape with the size of its box |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_color.png" width="32" height="32" alt="Flood Fill to Color"> | Flood Fill to Color | Fill each shape with the color under its middle |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_gradient.png" width="32" height="32" alt="Flood Fill to Gradient"> | Flood Fill to Gradient | Fill each shape with a ramp |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_index.png" width="32" height="32" alt="Flood Fill to Index"> | Flood Fill to Index | Number the shapes from bottom to top |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_position.png" width="32" height="32" alt="Flood Fill to Position"> | Flood Fill to Position | Fill each shape with the position of its middle |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_random_color.png" width="32" height="32" alt="Flood Fill to Random Color"> | Flood Fill to Random Color | Fill each shape with a random color |
+| <img src="doc/fork/images/icons/node_tg_flood_fill_to_random_grayscale.png" width="32" height="32" alt="Flood Fill to Random Grayscale"> | Flood Fill to Random Grayscale | Fill each shape with a random gray |
 
 **<img src="doc/fork/images/icons/node_lib_normal_map.png" width="32" height="32" alt=""> Filter ▸ Normal Map** (14)
 
-| Node | What it does |
-|---|---|
-| Normal Sobel | Make a normal map from a height with a Sobel filter |
-| Height to Normal World Units | Make a normal map from a height of a real size |
-| Height Normal Blender | Add the bumps of a height to a normal map |
-| Normal to Height | Rebuild a height from a normal map |
-| Normal to Height HQ | Rebuild a height from a normal map, with more passes for large shapes |
-| Normal Blend | Mix two normal maps through a mask |
-| Normal Combine | Lay a detail normal map on the bends of a base one |
-| Normal Uncombine | Take a base normal map back out of a combined one |
-| Normal Invert | Flip the red or green of a normal map |
-| Normal Normalize | Make every vector of a normal map one long |
-| Normal Transform | Turn, scale and slide a normal map, turning its normals with it |
-| Normal Vector Rotation | Turn the normals of a normal map by a map, without moving the image |
-| Facing Normal | How much a normal map faces straight out |
-| Bent Normal | Turn a normal map toward the open sky over a height |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_normal_sobel.png" width="32" height="32" alt="Normal Sobel"> | Normal Sobel | Make a normal map from a height with a Sobel filter |
+| <img src="doc/fork/images/icons/node_tg_height_to_normal_world_units.png" width="32" height="32" alt="Height to Normal World Units"> | Height to Normal World Units | Make a normal map from a height of a real size |
+| <img src="doc/fork/images/icons/node_tg_height_normal_blender.png" width="32" height="32" alt="Height Normal Blender"> | Height Normal Blender | Add the bumps of a height to a normal map |
+| <img src="doc/fork/images/icons/node_tg_normal_to_height.png" width="32" height="32" alt="Normal to Height"> | Normal to Height | Rebuild a height from a normal map |
+| <img src="doc/fork/images/icons/node_tg_normal_to_height_hq.png" width="32" height="32" alt="Normal to Height HQ"> | Normal to Height HQ | Rebuild a height from a normal map, with more passes for large shapes |
+| <img src="doc/fork/images/icons/node_tg_normal_blend.png" width="32" height="32" alt="Normal Blend"> | Normal Blend | Mix two normal maps through a mask |
+| <img src="doc/fork/images/icons/node_tg_normal_combine.png" width="32" height="32" alt="Normal Combine"> | Normal Combine | Lay a detail normal map on the bends of a base one |
+| <img src="doc/fork/images/icons/node_tg_normal_uncombine.png" width="32" height="32" alt="Normal Uncombine"> | Normal Uncombine | Take a base normal map back out of a combined one |
+| <img src="doc/fork/images/icons/node_tg_normal_invert.png" width="32" height="32" alt="Normal Invert"> | Normal Invert | Flip the red or green of a normal map |
+| <img src="doc/fork/images/icons/node_tg_normal_normalize.png" width="32" height="32" alt="Normal Normalize"> | Normal Normalize | Make every vector of a normal map one long |
+| <img src="doc/fork/images/icons/node_tg_normal_transform.png" width="32" height="32" alt="Normal Transform"> | Normal Transform | Turn, scale and slide a normal map, turning its normals with it |
+| <img src="doc/fork/images/icons/node_tg_normal_vector_rotation.png" width="32" height="32" alt="Normal Vector Rotation"> | Normal Vector Rotation | Turn the normals of a normal map by a map, without moving the image |
+| <img src="doc/fork/images/icons/node_tg_facing_normal.png" width="32" height="32" alt="Facing Normal"> | Facing Normal | How much a normal map faces straight out |
+| <img src="doc/fork/images/icons/node_tg_bent_normal.png" width="32" height="32" alt="Bent Normal"> | Bent Normal | Turn a normal map toward the open sky over a height |
 
 **<img src="doc/fork/images/icons/node_lib_blur.png" width="32" height="32" alt=""> Filter ▸ Blur** (6)
 
-| Node | What it does |
-|---|---|
-| Anisotropic Blur | Blur stretched along one direction, like motion |
-| Non-Uniform Blur | Blur that is stronger where a map is brighter |
-| Radial Blur | Blur the image as if it spun around a point |
-| Slope Blur | Smear an image along the slopes of a height map, for drips and wear |
-| Median Filter | Remove specks and noise while keeping edges sharp |
-| MLV Filter | Flatten areas of similar pixels while keeping the edges between them sharp |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_anisotropic_blur.png" width="32" height="32" alt="Anisotropic Blur"> | Anisotropic Blur | Blur stretched along one direction, like motion |
+| <img src="doc/fork/images/icons/node_tg_non_uniform_blur.png" width="32" height="32" alt="Non-Uniform Blur"> | Non-Uniform Blur | Blur that is stronger where a map is brighter |
+| <img src="doc/fork/images/icons/node_tg_radial_blur.png" width="32" height="32" alt="Radial Blur"> | Radial Blur | Blur the image as if it spun around a point |
+| <img src="doc/fork/images/icons/node_tg_slope_blur.png" width="32" height="32" alt="Slope Blur"> | Slope Blur | Smear an image along the slopes of a height map, for drips and wear |
+| <img src="doc/fork/images/icons/node_tg_median_filter.png" width="32" height="32" alt="Median Filter"> | Median Filter | Remove specks and noise while keeping edges sharp |
+| <img src="doc/fork/images/icons/node_tg_mlv_filter.png" width="32" height="32" alt="MLV Filter"> | MLV Filter | Flatten areas of similar pixels while keeping the edges between them sharp |
 
 **<img src="doc/fork/images/icons/node_lib_transform.png" width="32" height="32" alt=""> Transform** (18)
 
-| Node | What it does |
-|---|---|
-| Warp | Push an image along the slopes of a grayscale gradient image |
-| Directional Warp | Push an image in one direction, by an amount taken from a grayscale image |
-| Multi Directional Warp | Push an image in several directions at once and put the copies together |
-| Non Uniform Directional Warp | Push each pixel of an image in a direction read from an angle map |
-| Vector Warp | Push each pixel of an image by a vector map |
-| Vector Morph | Smear an image along the flow of a vector map |
-| Swirl | Twist an image around a point |
-| Skew | Slant an image sideways or up |
-| Trapezoid Transform | Narrow an image toward its top or bottom |
-| Non-Square Transform | Repeat, turn and slide an image that is not square |
-| Non-Uniform Rotation | Turn each pixel of an image by its own amount from a map |
-| Symmetry | Mirror one half of an image onto the other |
-| Symmetry Slice | Repeat one slice of an image around its middle |
-| Cartesian to Polar | Unroll an image around its middle into rows |
-| Polar to Cartesian | Roll an image up around the middle |
-| Auto Crop | Crop an image to what it shows and fill the frame with it |
-| Clone | Copy a round patch of an image to another place |
-| Size | Change the pixel size and bit depth that the following nodes work at |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_warp.png" width="32" height="32" alt="Warp"> | Warp | Push an image along the slopes of a grayscale gradient image |
+| <img src="doc/fork/images/icons/node_tg_directional_warp.png" width="32" height="32" alt="Directional Warp"> | Directional Warp | Push an image in one direction, by an amount taken from a grayscale image |
+| <img src="doc/fork/images/icons/node_tg_multi_directional_warp.png" width="32" height="32" alt="Multi Directional Warp"> | Multi Directional Warp | Push an image in several directions at once and put the copies together |
+| <img src="doc/fork/images/icons/node_tg_non_uniform_directional_warp.png" width="32" height="32" alt="Non Uniform Directional Warp"> | Non Uniform Directional Warp | Push each pixel of an image in a direction read from an angle map |
+| <img src="doc/fork/images/icons/node_tg_vector_warp.png" width="32" height="32" alt="Vector Warp"> | Vector Warp | Push each pixel of an image by a vector map |
+| <img src="doc/fork/images/icons/node_tg_vector_morph.png" width="32" height="32" alt="Vector Morph"> | Vector Morph | Smear an image along the flow of a vector map |
+| <img src="doc/fork/images/icons/node_tg_swirl.png" width="32" height="32" alt="Swirl"> | Swirl | Twist an image around a point |
+| <img src="doc/fork/images/icons/node_tg_skew.png" width="32" height="32" alt="Skew"> | Skew | Slant an image sideways or up |
+| <img src="doc/fork/images/icons/node_tg_trapezoid_transform.png" width="32" height="32" alt="Trapezoid Transform"> | Trapezoid Transform | Narrow an image toward its top or bottom |
+| <img src="doc/fork/images/icons/node_tg_non_square_transform.png" width="32" height="32" alt="Non-Square Transform"> | Non-Square Transform | Repeat, turn and slide an image that is not square |
+| <img src="doc/fork/images/icons/node_tg_non_uniform_rotation.png" width="32" height="32" alt="Non-Uniform Rotation"> | Non-Uniform Rotation | Turn each pixel of an image by its own amount from a map |
+| <img src="doc/fork/images/icons/node_tg_symmetry.png" width="32" height="32" alt="Symmetry"> | Symmetry | Mirror one half of an image onto the other |
+| <img src="doc/fork/images/icons/node_tg_symmetry_slice.png" width="32" height="32" alt="Symmetry Slice"> | Symmetry Slice | Repeat one slice of an image around its middle |
+| <img src="doc/fork/images/icons/node_tg_cartesian_to_polar.png" width="32" height="32" alt="Cartesian to Polar"> | Cartesian to Polar | Unroll an image around its middle into rows |
+| <img src="doc/fork/images/icons/node_tg_polar_to_cartesian.png" width="32" height="32" alt="Polar to Cartesian"> | Polar to Cartesian | Roll an image up around the middle |
+| <img src="doc/fork/images/icons/node_tg_auto_crop.png" width="32" height="32" alt="Auto Crop"> | Auto Crop | Crop an image to what it shows and fill the frame with it |
+| <img src="doc/fork/images/icons/node_tg_clone.png" width="32" height="32" alt="Clone"> | Clone | Copy a round patch of an image to another place |
+| <img src="doc/fork/images/icons/node_tg_size.png" width="32" height="32" alt="Size"> | Size | Change the pixel size and bit depth that the following nodes work at |
 
 **<img src="doc/fork/images/icons/node_lib_tiling.png" width="32" height="32" alt=""> Transform ▸ Tiling** (6)
 
-| Node | What it does |
-|---|---|
-| Make It Tile Patch | Make a tiling image from soft patches of one that does not tile |
-| Make It Tile Photo | Make a photo tile by blending its edges with a shifted copy |
-| Safe Transform | Repeat, turn and slide a tiling image so it keeps tiling |
-| Noise Upscale 1 | Make a tiling noise finer from two turned copies |
-| Noise Upscale 2 | Make a tiling noise finer from three turned copies |
-| Noise Upscale 3 | Make a tiling noise finer from four turned and mirrored copies |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_make_it_tile_patch.png" width="32" height="32" alt="Make It Tile Patch"> | Make It Tile Patch | Make a tiling image from soft patches of one that does not tile |
+| <img src="doc/fork/images/icons/node_tg_make_it_tile_photo.png" width="32" height="32" alt="Make It Tile Photo"> | Make It Tile Photo | Make a photo tile by blending its edges with a shifted copy |
+| <img src="doc/fork/images/icons/node_tg_safe_transform.png" width="32" height="32" alt="Safe Transform"> | Safe Transform | Repeat, turn and slide a tiling image so it keeps tiling |
+| <img src="doc/fork/images/icons/node_tg_noise_upscale_1.png" width="32" height="32" alt="Noise Upscale 1"> | Noise Upscale 1 | Make a tiling noise finer from two turned copies |
+| <img src="doc/fork/images/icons/node_tg_noise_upscale_2.png" width="32" height="32" alt="Noise Upscale 2"> | Noise Upscale 2 | Make a tiling noise finer from three turned copies |
+| <img src="doc/fork/images/icons/node_tg_noise_upscale_3.png" width="32" height="32" alt="Noise Upscale 3"> | Noise Upscale 3 | Make a tiling noise finer from four turned and mirrored copies |
 
 **<img src="doc/fork/images/icons/node_lib_function.png" width="32" height="32" alt=""> Utilities ▸ Function** (3)
 
-| Node | What it does |
-|---|---|
-| Position | Where each pixel is and how big the image is, to build functions from |
-| Sample | Read an image at any position, wrapping around its edges |
-| Random | A random number from a seed, once or for every pixel |
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tg_position.png" width="32" height="32" alt="Position"> | Position | Where each pixel is and how big the image is, to build functions from |
+| <img src="doc/fork/images/icons/node_tg_sample.png" width="32" height="32" alt="Sample"> | Sample | Read an image at any position, wrapping around its edges |
+| <img src="doc/fork/images/icons/node_tg_random.png" width="32" height="32" alt="Random"> | Random | A random number from a seed, once or for every pixel |
 
 ## Outliner
 
