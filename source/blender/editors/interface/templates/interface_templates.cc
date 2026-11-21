@@ -161,7 +161,9 @@ Block *template_common_search_menu(const bContext *C,
                                    ButtonSearchTooltipFn item_tooltip_fn,
                                    const int preview_rows,
                                    const int preview_cols,
-                                   float scale)
+                                   float scale,
+                                   ButtonSearchItemActionPollFn item_action_poll_fn,
+                                   ButtonSearchItemActionExecFn item_action_exec_fn)
 {
   static char search[256];
   wmWindow *win = CTX_wm_window(C);
@@ -187,7 +189,11 @@ Block *template_common_search_menu(const bContext *C,
   }
   /* list view */
   else {
-    const int searchbox_width = searchbox_size_x_guess(C, search_update_fn, search_arg);
+    int searchbox_width = searchbox_size_x_guess(C, search_update_fn, search_arg);
+    if (item_action_exec_fn) {
+      /* Room for the per-row duplicate/delete icons. */
+      searchbox_width += SEARCH_ITEM_ACTION_TOT * UI_UNIT_X;
+    }
     const int searchbox_height = searchbox_size_y();
     const int search_but_height = UI_UNIT_Y - 1.0f * UI_SCALE_FAC;
 
@@ -223,6 +229,9 @@ Block *template_common_search_menu(const bContext *C,
                          search_exec_fn,
                          active_item);
   button_func_search_set_tooltip(but, item_tooltip_fn);
+  if (item_action_exec_fn) {
+    button_func_search_set_item_actions(but, item_action_poll_fn, item_action_exec_fn);
+  }
 
   block_bounds_set_normal(block, UI_SEARCHBOX_BOUNDS);
   block_direction_set(block, UI_DIR_DOWN);

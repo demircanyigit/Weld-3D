@@ -1884,6 +1884,8 @@ static void modifyGeometry(ModifierData *md,
   nodes::GeoNodesModifierData modifier_eval_data{};
   modifier_eval_data.depsgraph = ctx->depsgraph;
   modifier_eval_data.self_object = ctx->object;
+  modifier_eval_data.esc_presses = ctx->esc_presses;
+  modifier_eval_data.can_stop = !(ctx->flag & MOD_APPLY_RENDER);
   auto eval_log = std::make_unique<geo_log::GeoNodesLog>();
   call_data.modifier_data = &modifier_eval_data;
 

@@ -146,7 +146,7 @@ static bool geo_cmp_node_poll_default(const bke::bNodeType * /*ntype*/,
                                       const bNodeTree *ntree,
                                       const char **r_disabled_hint)
 {
-  if (!STR_ELEM(ntree->idname, "GeometryNodeTree", "CompositorNodeTree")) {
+  if (!STR_ELEM(ntree->idname, "GeometryNodeTree", "CompositorNodeTree", "TextureGraphNodeTree")) {
     *r_disabled_hint = RPT_("Not a geometry or compositor node tree");
     return false;
   }

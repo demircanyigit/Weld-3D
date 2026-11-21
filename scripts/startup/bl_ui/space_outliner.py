@@ -345,6 +345,15 @@ class OUTLINER_MT_object(Menu):
 
         layout.separator()
 
+        layout.operator_menu_enum("object.group", "pivot", text="Group", icon='OBJECT_GROUP')
+        layout.operator("object.ungroup", icon='OBJECT_UNGROUP')
+
+        layout.separator()
+        row = layout.row(align=True)
+        row.operator_enum("outliner.object_color_tag_set", "color", icon_only=True)
+
+        layout.separator()
+
         layout.menu("OUTLINER_MT_id_data")
 
         layout.separator()
@@ -439,7 +448,21 @@ class OUTLINER_PT_filter(Panel):
             row.prop(space, "use_sync_select", text="Sync Selection")
 
             row = layout.row(align=True)
+            row.prop(space, "use_follow_active")
+
+            row = layout.row(align=True)
             row.prop(space, "show_mode_column", text="Show Mode Column")
+            layout.separator()
+
+        if display_mode in {'VIEW_LAYER', 'SCENES'}:
+            col = layout.column(align=True)
+            col.label(text="Rows")
+            row = col.row(align=True)
+            row.prop(space, "row_size", expand=True)
+            col.separator()
+            row = col.row(align=True)
+            row.label(text="Count")
+            row.prop(space, "count_mode", text="")
             layout.separator()
 
         filter_text_supported = True

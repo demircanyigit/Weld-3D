@@ -38,6 +38,7 @@
 
 #include "DNA_ID.h"
 
+#include "BKE_eval_break.hh"
 #include "BKE_anonymous_attribute_make.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_geometry_nodes_gizmos_transforms.hh"
@@ -243,6 +244,17 @@ class LazyFunctionForGeometryNode : public LazyFunction {
         own_lf_graph_info_.mapping.lf_input_index_for_output_bsocket_usage,
         own_lf_graph_info_.mapping.lf_input_index_for_reference_set_for_output,
         get_anonymous_attribute_name};
+
+    /* Esc was pressed while the modifier runs: the remaining nodes give empty results, so it
+     * ends quickly. The modifier stack then turns the modifier off. */
+    if (const GeoNodesModifierData *modifier_data = user_data->call_data->modifier_data) {
+      if (modifier_data->can_stop &&
+          bke::eval_break::requested_since(modifier_data->esc_presses))
+      {
+        geo_params.set_default_remaining_outputs();
+        return;
+      }
+    }
 
     node_.typeinfo->geometry_node_execute(geo_params);
   }

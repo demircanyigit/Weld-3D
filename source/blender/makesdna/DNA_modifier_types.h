@@ -199,6 +199,30 @@ enum ModifierType {
   eModifierType_NormalShape = 158,
   eModifierType_Trim = 159,
   eModifierType_Tile = 160,
+  eModifierType_Patch = 161,
+  eModifierType_AutoWeights = 162,
+  eModifierType_SmoothWeights = 163,
+  eModifierType_TransferWeights = 164,
+  eModifierType_BoneColors = 165,
+  eModifierType_Pack = 166,
+  eModifierType_Rock = 167,
+  eModifierType_Masks = 168,
+  eModifierType_Snow = 169,
+  eModifierType_Tree = 170,
+  eModifierType_Resample = 171,
+  eModifierType_Lean = 172,
+  eModifierType_Chisel = 173,
+  eModifierType_Faceset = 174,
+  eModifierType_Wrap = 175,
+  eModifierType_Place = 176,
+  eModifierType_Scatter = 177,
+  eModifierType_Dent = 178,
+  eModifierType_Contact = 179,
+  eModifierType_Cable = 180,
+  eModifierType_Cracks = 181,
+  eModifierType_CollisionHull = 182,
+  eModifierType_Bricks = 183,
+  eModifierType_UVRotate = 184,
   NUM_MODIFIER_TYPES,
 };
 
@@ -277,6 +301,12 @@ struct ModifierData {
 
   /** Runtime field which contains runtime data which is specific to a modifier type. */
   void *runtime = nullptr;
+
+  /**
+   * Baked result of the stack up to and including this modifier. While it is set, evaluation
+   * starts from it and skips this modifier and the ones before it.
+   */
+  struct Mesh *bake_mesh = nullptr;
 };
 
 /**
@@ -454,6 +484,34 @@ enum ArrayModifierFitType {
   MOD_ARR_FITCURVE = 2,
 };
 
+/** #ArrayModifierData.source and #RadialArrayModifierData.source */
+enum ArraySource {
+  /** Copies of the mesh itself. */
+  MOD_ARRAY_SOURCE_MESH = 0,
+  MOD_ARRAY_SOURCE_COLLECTION = 1,
+  MOD_ARRAY_SOURCE_OBJECTS = 2,
+};
+
+/** #ArrayModifierData.pick and #RadialArrayModifierData.pick */
+enum ArrayPick {
+  /** A random object for each copy, from the seed. */
+  MOD_ARRAY_PICK_RANDOM = 0,
+  /** The objects one after another, starting over at the end. */
+  MOD_ARRAY_PICK_IN_ORDER = 1,
+  /** The mesh itself and the objects in turn. */
+  MOD_ARRAY_PICK_ALTERNATE = 2,
+};
+
+/** One object in the list of objects an Array or Radial Array places. */
+struct ArraySourceObject {
+  ArraySourceObject *next = nullptr, *prev = nullptr;
+  struct Object *object = nullptr;
+  /** How often this object is picked at random, next to the others. Used by Place and Scatter. */
+  float weight = 1.0f;
+  /** Times in a row this object is placed, when the pattern is built from the list. */
+  int count = 1;
+};
+
 /** #ArrayModifierData.offset_type */
 enum ArrayModifierOffsetType {
   MOD_ARR_OFF_CONST = (1 << 0),
@@ -478,6 +536,10 @@ struct ArrayModifierData {
   struct Object *curve_ob = nullptr;
   /** The object to use for object offset. */
   struct Object *offset_ob = nullptr;
+  /** Objects to place for #MOD_ARRAY_SOURCE_COLLECTION. */
+  struct Collection *collection = nullptr;
+  /** Objects to place for #MOD_ARRAY_SOURCE_OBJECTS, #ArraySourceObject. */
+  ListBaseT<ArraySourceObject> objects = {nullptr, nullptr};
   /**
    * A constant duplicate offset;
    * 1 means the duplicates are 1 unit apart.
@@ -518,6 +580,13 @@ struct ArrayModifierData {
   /** The number of duplicates to generate for #MOD_ARR_FIXEDCOUNT. */
   int count = 2;
   float uv_offset[2] = {0.0f, 0.0f};
+  /** Seed for #MOD_ARRAY_PICK_RANDOM. */
+  int seed = 0;
+  /** #ArraySource. */
+  char source = MOD_ARRAY_SOURCE_MESH;
+  /** #ArrayPick. */
+  char pick = MOD_ARRAY_PICK_RANDOM;
+  char _pad[2] = {};
 };
 
 /** #MirrorModifierData.flag */
@@ -700,6 +769,13 @@ struct BevelModifierData {
 
   /** Custom bevel vertex weight name. */
   char vertex_weight_name[64] = "bevel_weight_vert";
+
+  /** Share of the width randomly taken off every edge or vertex, 0 to 1. */
+  float random_width = 0.0f;
+  /** Up to this many more segments, random for every loose part. */
+  int random_segments = 0;
+  int seed = 0;
+  char _pad2[4] = {};
 };
 
 /** #FluidModifierData.type */
@@ -1125,6 +1201,8 @@ enum BooleanModifierSolver {
   eBooleanModifierSolver_Float = 0,
   eBooleanModifierSolver_Mesh_Arr = 1,
   eBooleanModifierSolver_Manifold = 2,
+  /** Manifold when it can, Exact otherwise. */
+  eBooleanModifierSolver_Auto = 3,
 };
 
 /** #BooleanModifierData.flag */
@@ -1133,6 +1211,10 @@ enum BooleanModifierFlag {
   eBooleanModifierFlag_Object = (1 << 1),
   eBooleanModifierFlag_Collection = (1 << 2),
   eBooleanModifierFlag_HoleTolerant = (1 << 3),
+  /** Operand type: no other object, the loose parts of the mesh merge with each other. */
+  eBooleanModifierFlag_SelfOperand = (1 << 4),
+  /** Merge flat triangles back into faces and remove extra points after the operation. */
+  eBooleanModifierFlag_Clean = (1 << 5),
 };
 
 /** #BooleanModifierData.bm_flag (only used when #G_DEBUG is set). */
@@ -1459,6 +1541,18 @@ enum SolidifyModifierFlag {
   MOD_SOLIDIFY_NOSHELL = (1 << 6),
   MOD_SOLIDIFY_OFFSET_ANGLE_CLAMP = (1 << 7),
   MOD_SOLIDIFY_NONMANIFOLD_FLAT_FACES = (1 << 8),
+  /** Random Thickness: one random thickness for every loose part instead of noise. */
+  MOD_SOLIDIFY_RANDOM_PER_ISLAND = (1 << 9),
+};
+
+/** #SolidifyModifierData.rim_shading */
+enum SolidifyModifierRimShading {
+  /** Like the faces next to the rim. */
+  MOD_SOLIDIFY_RIM_SHADING_KEEP = 0,
+  MOD_SOLIDIFY_RIM_SHADING_FLAT = 1,
+  MOD_SOLIDIFY_RIM_SHADING_SMOOTH = 2,
+  /** Smooth, with sharp edges where the rim meets the rest. */
+  MOD_SOLIDIFY_RIM_SHADING_HARD = 3,
 };
 
 /** #SolidifyModifierData.mode */
@@ -1519,6 +1613,15 @@ struct SolidifyModifierData {
 
   float merge_tolerance = 0.0001f;
   float bevel_convex = 0.0f;
+
+  /** Share of the thickness randomly taken off, 0 to 1. */
+  float random_thickness = 0.0f;
+  /** Size of the noise of Random Thickness. */
+  float random_scale = 1.0f;
+  int seed = 0;
+  /** #SolidifyModifierRimShading. */
+  char rim_shading = MOD_SOLIDIFY_RIM_SHADING_KEEP;
+  char _pad1[3] = {};
 };
 
 enum ScrewModifierFlag {
@@ -2046,6 +2149,12 @@ struct QuadriflowRemeshModifierData {
 /** #SliceModifierData.flag */
 enum SliceModifierFlag {
   MOD_SLICE_FILL = (1 << 0),
+  /** Write a color for each side into a color attribute. */
+  MOD_SLICE_COLOR = (1 << 1),
+  /** The faces on the cut get their own color. */
+  MOD_SLICE_CUT_COLOR = (1 << 2),
+  /** Keep Both: split into two closed parts instead of only adding the cut. */
+  MOD_SLICE_SEPARATE = (1 << 3),
 };
 
 /** Slice modifier. */
@@ -2062,6 +2171,14 @@ struct SliceModifierData {
   /** #SliceModifierFlag. */
   char flag = MOD_SLICE_FILL;
   char _pad[2] = {};
+  /** Colors of the part on the side the plane faces, the other part and the cut faces. */
+  float above_color[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+  float below_color[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+  float cut_color[4] = {0.0f, 1.0f, 0.0f, 1.0f};
+  /** Soft change between the two colors over this distance on each side of the plane. */
+  float color_blend = 0.0f;
+  /** Name of the color attribute, "Color" when empty. */
+  char color_name[68] = "Color";
 };
 
 /** #CapHolesModifierData.flag */
@@ -2216,7 +2333,7 @@ enum NoiseModifierFlag {
 struct NoiseModifierData {
   ModifierData modifier;
 
-  float strength[3] = {0.0f, 0.0f, 0.2f};
+  float strength[3] = {0.1f, 0.1f, 0.1f};
   float scale = 1.0f;
   float phase = 0.0f;
   float detail = 2.0f;
@@ -2227,6 +2344,9 @@ struct NoiseModifierData {
   int flag = 0;
   /** MAX_VGROUP_NAME. */
   char vertex_group[64] = "";
+  /** Multiplies the strength on every axis. */
+  float strength_factor = 1.0f;
+  char _pad[4] = {};
 };
 
 /** #FFDModifierData.flag */
@@ -2533,21 +2653,252 @@ struct SmartUVProjectModifierData {
   char vertex_group[64] = "";
 };
 
+/** #RockModifierData.flag */
+enum RockModifierFlag {
+  MOD_ROCK_PER_ISLAND = (1 << 0),
+  MOD_ROCK_CUT_MATERIAL = (1 << 1),
+};
+
+/** Rock: cuts a closed shape with flat cuts, mostly through its corners, for a low poly rock. */
+struct RockModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *cut_material_pick = nullptr;
+
+  /** How many flat cuts. */
+  int cuts = 24;
+  int seed = 0;
+  /** How deep the cuts go, as a share of the size of the shape in their direction. */
+  float depth = 0.45f;
+  /** How much the cuts aim at the corners instead of any direction. */
+  float corners = 0.4f;
+  /** Material index of the faces made by the cuts. */
+  short cut_material = 0;
+  /** #RockModifierFlag. */
+  char flag = MOD_ROCK_PER_ISLAND;
+  char _pad[5] = {};
+};
+
+/** #MasksModifierData.mask_type */
+enum MasksModifierType {
+  MOD_MASKS_OCCLUSION = 0,
+  MOD_MASKS_CURVATURE = 1,
+  MOD_MASKS_THICKNESS = 2,
+  MOD_MASKS_EDGES = 3,
+  MOD_MASKS_DIRECTION = 4,
+  MOD_MASKS_HEIGHT = 5,
+  MOD_MASKS_PROXIMITY = 6,
+  MOD_MASKS_PARTS = 7,
+  MOD_MASKS_NOISE = 8,
+};
+
+/** #MasksModifierData.blend */
+enum MasksModifierBlend {
+  MOD_MASKS_BLEND_MIX = 0,
+  MOD_MASKS_BLEND_ADD = 1,
+  MOD_MASKS_BLEND_SUBTRACT = 2,
+  MOD_MASKS_BLEND_MULTIPLY = 3,
+  MOD_MASKS_BLEND_SCREEN = 4,
+  MOD_MASKS_BLEND_OVERLAY = 5,
+  MOD_MASKS_BLEND_LIGHTEN = 6,
+  MOD_MASKS_BLEND_DARKEN = 7,
+  MOD_MASKS_BLEND_DIFFERENCE = 8,
+};
+
+/** #MasksModifierData.curvature */
+enum MasksModifierCurvature {
+  MOD_MASKS_CURVATURE_BOTH = 0,
+  MOD_MASKS_CURVATURE_CONVEX = 1,
+  MOD_MASKS_CURVATURE_CONCAVE = 2,
+};
+
+/** #MasksModifierData.flag */
+enum MasksModifierFlag {
+  MOD_MASKS_INVERT = (1 << 0),
+  MOD_MASKS_BORDERS = (1 << 1),
+  MOD_MASKS_COLOR = (1 << 2),
+};
+
+/** Masks: stores a gray value per point, such as occlusion or curvature, blended over what an
+ * attribute or vertex group already holds. */
+struct MasksModifierData {
+  ModifierData modifier;
+
+  /** Proximity target, or a second object that blocks the occlusion rays. */
+  struct Object *object = nullptr;
+  /** MAX_CUSTOMDATA_LAYER_NAME. */
+  char attribute_name[68] = "mask";
+  /** MAX_VGROUP_NAME. */
+  char vertex_group[64] = "";
+  /** #MasksModifierType. */
+  char mask_type = MOD_MASKS_OCCLUSION;
+  /** #MasksModifierBlend. */
+  char blend = MOD_MASKS_BLEND_MIX;
+  /** #MasksModifierCurvature. */
+  char curvature = MOD_MASKS_CURVATURE_CONVEX;
+  /** 0, 1 or 2 for X, Y or Z. */
+  char axis = 2;
+  /** #MasksModifierFlag. */
+  short flag = MOD_MASKS_BORDERS;
+  /** Rays per point, for occlusion and thickness. */
+  short rays = 32;
+  int smooth = 0;
+  int seed = 0;
+  int detail = 3;
+  float factor = 1.0f;
+  float low = 0.0f;
+  float high = 1.0f;
+  /** How far rays look, how wide edge bands are, how far proximity reaches. */
+  float distance = 0.5f;
+  /** How wide the cone of rays is, 1 is the whole half sphere. */
+  float spread = 1.0f;
+  /** Curvature strength or noise size. */
+  float scale = 2.0f;
+  /** Smallest angle between faces that counts as an edge. */
+  float angle = 0.523599f;
+  float direction[3] = {0.0f, 0.0f, 1.0f};
+  float coverage = 0.5f;
+  float softness = 0.2f;
+};
+
+/** #SnowModifierData.flag */
+enum SnowModifierFlag {
+  MOD_SNOW_FACETED = (1 << 0),
+  MOD_SNOW_ONLY = (1 << 1),
+};
+
+/** Snow: a soft layer of snow on the parts of the mesh that face up and are open to the sky. */
+struct SnowModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_pick = nullptr;
+
+  /** Objects that keep snow off what is under them. */
+  struct Collection *blockers = nullptr;
+  /** Attribute or vertex group that scales the snow, empty for none. MAX_CUSTOMDATA_LAYER_NAME. */
+  char mask_name[68] = "";
+  float thickness = 0.1f;
+  /** Steepest slope that still holds snow. */
+  float max_slope = 1.0472f;
+  /** The way the snow falls, in world space. */
+  float direction[3] = {0.0f, 0.0f, -1.0f};
+  /** How far the snow reaches past edges, as a share of its thickness. */
+  float overhang = 1.0f;
+  float drift = 0.3f;
+  float drift_scale = 2.0f;
+  float voxel_size = 0.02f;
+  float smooth = 0.5f;
+  /** Rays toward the sky per sample, 0 to not check what is above. */
+  int sky_rays = 16;
+  int seed = 0;
+  short material = 1;
+  /** #SnowModifierFlag. */
+  char flag = 0;
+  char _pad[1] = {};
+};
+
+/** #TreeModifierData.flag */
+enum TreeModifierFlag {
+  /** Leave the leaves out, for the bare branches. */
+  MOD_TREE_NO_LEAVES = (1 << 0),
+  /** Grow a tree on every point of the mesh instead of one at the origin. */
+  MOD_TREE_ON_POINTS = (1 << 1),
+};
+
+/** #ResampleModifierData.mode */
+enum ResampleModifierMode {
+  /** Segments no longer than #ResampleModifierData.length. */
+  MOD_RESAMPLE_LENGTH = 0,
+  /** #ResampleModifierData.count segments on every edge. */
+  MOD_RESAMPLE_COUNT = 1,
+};
+
+/** #ResampleModifierData.flag */
+enum ResampleModifierFlag {
+  MOD_RESAMPLE_INVERT_VGROUP = (1 << 0),
+};
+
+/** Resample: adds points along the edges without changing the shape. */
+struct ResampleModifierData {
+  ModifierData modifier;
+
+  /** Longest length of a segment. */
+  float length = 0.1f;
+  /** Number of segments of each edge. */
+  int count = 2;
+  /** #ResampleModifierMode. */
+  char mode = MOD_RESAMPLE_LENGTH;
+  /** #ResampleModifierFlag. */
+  char flag = 0;
+  char _pad[6] = {};
+  /** Only edges with both points in this group are split. MAX_VGROUP_NAME. */
+  char vertex_group[64] = "";
+  /** Point attribute that is true on the added points, none when empty.
+   * MAX_CUSTOMDATA_LAYER_NAME. */
+  char new_points_name[68] = "";
+  char _pad1[4] = {};
+};
+
+/** Tree: grows a tree from a Tree Graph, as one mesh ready for games. */
+struct TreeModifierData {
+  ModifierData modifier;
+
+  /** The Tree Graph node tree that describes the tree. */
+  struct bNodeTree *tree_graph = nullptr;
+  /** Values of the graph's inputs, by socket identifier. Kept in step with the graph. */
+  struct IDProperty *properties = nullptr;
+  int seed = 0;
+  /** Scales the whole tree. */
+  float scale = 1.0f;
+  /** Most triangles for one tree, 0 for no limit. */
+  int triangle_budget = 0;
+  /** Triangles of the last result, shown in the panel. Not saved meaningfully. */
+  int triangles = 0;
+  /** #TreeModifierFlag. */
+  int flag = 0;
+  char _pad[4] = {};
+};
+
 /** #VoronoiFractureModifierData.source */
 enum VoronoiFractureSource {
   MOD_VORONOI_SOURCE_RANDOM = 0,
   MOD_VORONOI_SOURCE_OBJECT = 1,
 };
 
+/** #VoronoiFractureModifierData.per */
+enum VoronoiFracturePer {
+  /** Count random points for the whole mesh. */
+  MOD_VORONOI_PER_MESH = 0,
+  /** Every loose part breaks on its own, with Count points. */
+  MOD_VORONOI_PER_ISLAND = 1,
+  /** Count points under the faces of every face set. */
+  MOD_VORONOI_PER_FACE_SET = 2,
+};
+
 /** #VoronoiFractureModifierData.flag */
 enum VoronoiFractureModifierFlag {
   MOD_VORONOI_SEPARATE_ISLANDS = (1 << 0),
   MOD_VORONOI_INTERIOR_MATERIAL = (1 << 1),
+  /** With Per Island or Face Set: smaller parts get fewer points. */
+  MOD_VORONOI_BY_SIZE = (1 << 2),
+  /** Store the piece index and a random value per piece on the points. */
+  MOD_VORONOI_PIECE_DATA = (1 << 3),
+};
+
+/** #VoronoiFractureModifierData.select_mode */
+enum VoronoiFractureSelect {
+  MOD_VORONOI_SELECT_NONE = 0,
+  /** Store the picked pieces in a "Selected" attribute. */
+  MOD_VORONOI_SELECT_MARK = 1,
+  MOD_VORONOI_SELECT_REMOVE = 2,
+  MOD_VORONOI_SELECT_KEEP = 3,
 };
 
 /** Voronoi Fracture modifier. */
 struct VoronoiFractureModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *interior_material_pick = nullptr;
 
   /** #VoronoiFractureSource. */
   char source = MOD_VORONOI_SOURCE_RANDOM;
@@ -2562,6 +2913,277 @@ struct VoronoiFractureModifierData {
   float cut_gap = 0.0f;
   /** Its points, vertices, curve points or instances are the cell points. */
   struct Object *points_object = nullptr;
+  /** #VoronoiFracturePer, for random points. */
+  char per = MOD_VORONOI_PER_MESH;
+  /** #VoronoiFractureSelect, what happens to the pieces picked at random. */
+  char select_mode = MOD_VORONOI_SELECT_NONE;
+  char _pad[6] = {};
+  /** Random points gather around this object, so the pieces are smaller there. */
+  struct Object *impact_object = nullptr;
+  float impact_radius = 1.0f;
+  /** Share of the random points inside the impact radius. */
+  float impact_share = 0.6f;
+  /** Stretch of the cells along X, Y and Z, for long splinters and slabs. */
+  float cell_scale[3] = {1.0f, 1.0f, 1.0f};
+  /** Share of the pieces picked at random. */
+  float select_amount = 0.3f;
+  int select_seed = 0;
+  char _pad1[4] = {};
+};
+
+/** #DentModifierData.flag */
+enum DentModifierFlag {
+  MOD_DENT_INVERT_VGROUP = (1 << 0),
+};
+
+/** #DentModifierData.direction */
+enum DentDirection {
+  /** Along the -Z axis of the object, or of the mesh without one. */
+  MOD_DENT_DIR_OBJECT = 0,
+  MOD_DENT_DIR_NORMAL = 1,
+  /** Away from the center of the dent, like a ball pressed in. */
+  MOD_DENT_DIR_CENTER = 2,
+};
+
+/** Dent modifier. */
+struct DentModifierData {
+  ModifierData modifier;
+
+  /** The dent is at this object. Without it, at random spots or at the origin. */
+  struct Object *object = nullptr;
+  float radius = 0.5f;
+  float depth = 0.1f;
+  /** Height of the raised rim, as a share of the depth. */
+  float rim = 0.25f;
+  /** 0 a round bowl, 1 a sharp cone. */
+  float sharpness = 0.2f;
+  float roughness = 0.0f;
+  /** Random dents, without an object. */
+  int count = 0;
+  int seed = 0;
+  float radius_random = 0.5f;
+  /** #DentDirection. */
+  char direction = MOD_DENT_DIR_OBJECT;
+  /** #DentModifierFlag. */
+  char flag = 0;
+  char _pad[2] = {};
+  /** MAX_VGROUP_NAME. */
+  char vertex_group[64] = "";
+  char _pad1[4] = {};
+};
+
+/** #ContactModifierData.flag */
+enum ContactModifierFlag {
+  MOD_CONTACT_INVERT_VGROUP = (1 << 0),
+};
+
+/** Contact modifier. */
+struct ContactModifierData {
+  ModifierData modifier;
+
+  /** The mesh that presses in. */
+  struct Object *object = nullptr;
+  /** Distance kept from the other surface. */
+  float offset = 0.0f;
+  /** How much the surface swells around the contact, for the deepest press. */
+  float bulge = 0.5f;
+  float bulge_distance = 0.3f;
+  int smooth = 2;
+  /** #ContactModifierFlag. */
+  char flag = 0;
+  char _pad[3] = {};
+  /** MAX_VGROUP_NAME. */
+  char vertex_group[64] = "";
+  char _pad1[4] = {};
+};
+
+/** #CableModifierData.source */
+enum CableSource {
+  MOD_CABLE_EDGES = 0,
+  MOD_CABLE_OBJECTS = 1,
+};
+
+/** #CableModifierData.flag */
+enum CableModifierFlag {
+  MOD_CABLE_KEEP_MESH = (1 << 0),
+  MOD_CABLE_CAPS = (1 << 1),
+};
+
+/** Cable modifier. */
+struct CableModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_index_pick = nullptr;
+
+  struct Object *start_object = nullptr;
+  struct Object *end_object = nullptr;
+  /** Drop in the middle, as a share of the span. */
+  float sag = 0.15f;
+  float sag_random = 0.0f;
+  float radius = 0.02f;
+  int segments = 24;
+  int sides = 8;
+  int seed = 0;
+  /** #CableSource. */
+  char source = MOD_CABLE_EDGES;
+  /** #CableModifierFlag. */
+  char flag = MOD_CABLE_KEEP_MESH | MOD_CABLE_CAPS;
+  char _pad[2] = {};
+  int material_index = 0;
+};
+
+/** #CracksModifierData.mode */
+enum CracksMode {
+  MOD_CRACKS_GROOVE = 0,
+  MOD_CRACKS_STRIPS = 1,
+};
+
+/** Cracks modifier. */
+struct CracksModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_index_pick = nullptr;
+
+  /** The cracks start at this object. Without it, at random spots. */
+  struct Object *object = nullptr;
+  /** Cracks from each impact. */
+  int count = 5;
+  int seed = 0;
+  float length = 1.0f;
+  float width = 0.03f;
+  float depth = 0.02f;
+  float jitter = 0.5f;
+  float branching = 0.4f;
+  /** Random impacts, without an object. */
+  int impacts = 1;
+  /** #CracksMode. */
+  char mode = MOD_CRACKS_GROOVE;
+  char _pad[3] = {};
+  int material_index = 0;
+  /** Point attribute, 1 on the cracks. */
+  char attribute_name[68] = "crack";
+  char _pad1[4] = {};
+};
+
+/** #CollisionHullModifierData.mode */
+enum CollisionHullMode {
+  MOD_HULL_SINGLE = 0,
+  MOD_HULL_ISLANDS = 1,
+  MOD_HULL_PARTS = 2,
+  MOD_HULL_BOXES = 3,
+};
+
+/** #CollisionHullModifierData.flag */
+enum CollisionHullFlag {
+  MOD_HULL_KEEP_MESH = (1 << 0),
+};
+
+/** Collision Hull modifier. */
+struct CollisionHullModifierData {
+  ModifierData modifier;
+
+  /** #CollisionHullMode. */
+  char mode = MOD_HULL_SINGLE;
+  /** #CollisionHullFlag. */
+  char flag = 0;
+  char _pad[2] = {};
+  int parts = 8;
+  int seed = 0;
+  float offset = 0.0f;
+};
+
+/** #BricksModifierData.flag */
+enum BricksModifierFlag {
+  MOD_BRICKS_OFFSET = (1 << 0),
+  MOD_BRICKS_HOLLOW = (1 << 1),
+  MOD_BRICKS_PIECE_DATA = (1 << 2),
+  MOD_BRICKS_INTERIOR_MATERIAL = (1 << 3),
+};
+
+/** #BricksModifierData.mode */
+enum BricksModifierMode {
+  /** Rebuild the mesh from whole bricks on a grid. Zero, so older files keep it. */
+  MOD_BRICKS_MODE_STEPPED = 0,
+  /** Cut the mesh itself into blocks laid in courses. */
+  MOD_BRICKS_MODE_CUT = 1,
+};
+
+/** Bricks modifier. */
+struct BricksModifierData {
+  ModifierData modifier;
+
+  /** One brick: length along X, depth along Y, height along Z. */
+  float size[3] = {0.2f, 0.1f, 0.066f};
+  float gap = 0.005f;
+  int seed = 0;
+  /** #BricksModifierFlag. */
+  char flag = MOD_BRICKS_OFFSET;
+  /** #BricksModifierMode. */
+  char mode = MOD_BRICKS_MODE_CUT;
+  /** Cut mode: Running, Stack, Flemish, English or Ashlar, the values of the Masonry patterns. */
+  char pattern = 0;
+  char _pad0 = 0;
+  /** Cut mode: random changes of the joints and the course heights, 0 to 1. */
+  float random_length = 0.2f;
+  float random_height = 0.0f;
+  /** Cut mode: small random turns and shrinking of each block, 0 to 1. */
+  float uneven = 0.0f;
+  /** Cut mode: width of the rounded block edges. */
+  float bevel = 0.0f;
+  int bevel_segments = 1;
+  int interior_material = 0;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *interior_material_pick = nullptr;
+};
+
+/** #UVRotateModifierData.mode */
+enum UVRotateMode {
+  MOD_UV_ROTATE_ANGLE = 0,
+  MOD_UV_ROTATE_ALIGN = 1,
+};
+
+/** #UVRotateModifierData.pivot_mode */
+enum UVRotatePivot {
+  MOD_UV_ROTATE_PIVOT_ISLAND = 0,
+  MOD_UV_ROTATE_PIVOT_CENTER = 1,
+  MOD_UV_ROTATE_PIVOT_BOUNDS = 2,
+  MOD_UV_ROTATE_PIVOT_CUSTOM = 3,
+};
+
+/** #UVRotateModifierData.space */
+enum UVRotateSpace {
+  MOD_UV_ROTATE_SPACE_WORLD = 0,
+  MOD_UV_ROTATE_SPACE_OBJECT = 1,
+  MOD_UV_ROTATE_SPACE_CUSTOM = 2,
+};
+
+/** UV Rotate modifier. */
+struct UVRotateModifierData {
+  ModifierData modifier;
+
+  /** The space of the axis, for Custom. */
+  struct Object *object = nullptr;
+  float angle = 0.0f;
+  /** Random turn of each island, up to this both ways. */
+  float angle_random = 0.0f;
+  float pivot[2] = {0.5f, 0.5f};
+  /** Round the turn to steps of this, zero for none. */
+  float snap = 0.0f;
+  int seed = 0;
+  /** #UVRotateMode. */
+  char mode = MOD_UV_ROTATE_ANGLE;
+  /** #UVRotatePivot. */
+  char pivot_mode = MOD_UV_ROTATE_PIVOT_ISLAND;
+  /** #UVRotateSpace. */
+  char space = MOD_UV_ROTATE_SPACE_WORLD;
+  /** 0 X, 1 Y, 2 Z. */
+  char axis = 2;
+  /** Where the axis points in the UVs: 0 up, 1 right, 2 down, 3 left. */
+  char align_to = 0;
+  char _pad[3] = {};
+  /** MAX_CUSTOMDATA_LAYER_NAME, the active UV map when empty. */
+  char uv_map[68] = "";
+  char _pad1[4] = {};
 };
 
 /** #UVWMapModifierData.flag */
@@ -2644,6 +3266,11 @@ enum RadialArrayModifierFlag {
 struct RadialArrayModifierData {
   ModifierData modifier;
 
+  /** Objects to place for #MOD_ARRAY_SOURCE_COLLECTION. */
+  struct Collection *collection = nullptr;
+  /** Objects to place for #MOD_ARRAY_SOURCE_OBJECTS, #ArraySourceObject. */
+  ListBaseT<ArraySourceObject> objects = {nullptr, nullptr};
+
   int count = 6;
   /** 360 degrees. */
   float angle = 6.2831855f;
@@ -2654,7 +3281,14 @@ struct RadialArrayModifierData {
   char axis = 2;
   /** #RadialArrayModifierFlag. */
   char flag = MOD_RADIAL_ARRAY_ROTATE;
-  char _pad[6] = {};
+  /** #ArraySource. */
+  char source = MOD_ARRAY_SOURCE_MESH;
+  /** #ArrayPick. */
+  char pick = MOD_ARRAY_PICK_RANDOM;
+  char _pad[4] = {};
+  /** Seed for #MOD_ARRAY_PICK_RANDOM. */
+  int seed = 0;
+  char _pad1[4] = {};
 };
 
 /** #VolumeSelectModifierData.flag */
@@ -2891,6 +3525,28 @@ enum BlastModifierFilter {
 };
 enum BlastModifierFlag {
   MOD_BLAST_INVERT = (1 << 0),
+  /** Keep everything and store the removed islands in an attribute. */
+  MOD_BLAST_MARK = (1 << 1),
+};
+/** #BlastModifierData.select */
+enum BlastModifierSelect {
+  MOD_BLAST_SELECT_SIZE = 0,
+  MOD_BLAST_SELECT_RANDOM = 1,
+  MOD_BLAST_SELECT_INSIDE = 2,
+  MOD_BLAST_SELECT_GRADIENT = 3,
+  MOD_BLAST_SELECT_NOISE = 4,
+  MOD_BLAST_SELECT_ATTRIBUTE = 5,
+};
+/** #BlastModifierData.gradient_shape */
+enum BlastModifierGradient {
+  MOD_BLAST_GRADIENT_LINEAR = 0,
+  MOD_BLAST_GRADIENT_SPHERICAL = 1,
+};
+/** #BlastModifierData.inside_test */
+enum BlastModifierInside {
+  MOD_BLAST_INSIDE_CENTER = 0,
+  MOD_BLAST_INSIDE_ANY = 1,
+  MOD_BLAST_INSIDE_ALL = 2,
 };
 struct BlastModifierData {
   ModifierData modifier;
@@ -2902,6 +3558,23 @@ struct BlastModifierData {
   float minimum_volume = 0.001f;
   float minimum_size = 0.1f;
   int flag = 0;
+  /** #BlastModifierSelect. */
+  int select = MOD_BLAST_SELECT_SIZE;
+  /** #BlastModifierInside. */
+  int inside_test = MOD_BLAST_INSIDE_CENTER;
+  /** #BlastModifierGradient. */
+  int gradient_shape = MOD_BLAST_GRADIENT_LINEAR;
+  int seed = 0;
+  /** Random: share removed. Gradient, Noise and Attribute: the threshold. */
+  float amount = 0.5f;
+  float randomness = 0.0f;
+  float distance = 2.0f;
+  float noise_scale = 1.0f;
+  /** Inside: the volume. Gradient: where it starts and its Z axis. */
+  struct Object *object = nullptr;
+  /** MAX_CUSTOMDATA_LAYER_NAME. */
+  char attribute_name[68] = "";
+  char mark_name[68] = "blasted";
 };
 
 /** #PlanksModifierData.flag */
@@ -2918,6 +3591,10 @@ enum PlanksModifierFlag {
 /** Planks modifier: floors and walls of boards on faces, and crates and barrels of boards. */
 struct PlanksModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_pick = nullptr;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *metal_material_pick = nullptr;
 
   /** Floors and walls: only faces in this group get boards. */
   char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
@@ -2990,6 +3667,14 @@ enum RoofModifierFlag {
 /** Roof modifier: build roofs on outlines, or dress faces modeled as a roof. */
 struct RoofModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *roof_material_pick = nullptr;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *covering_material_pick = nullptr;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *trim_material_pick = nullptr;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *wall_material_pick = nullptr;
 
   /** Only faces in this group are used. */
   char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
@@ -3261,6 +3946,8 @@ enum EdgeDamageFlag {
 /** Edge Damage modifier: a smoothed, pushed copy of the mesh intersected with the mesh. */
 struct EdgeDamageModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_index_pick = nullptr;
 
   /** Damage is only allowed in this group. */
   char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
@@ -3314,7 +4001,7 @@ struct UVScaleModifierData {
   int flag = MOD_UV_SCALE_ISLANDS;
   float scale[2] = {1.0f, 1.0f};
   float center[2] = {0.5f, 0.5f};
-  float density = 1024.0f;
+  float density = 256.0f;
   int resolution[2] = {1024, 1024};
   char _pad[4] = {};
 };
@@ -3575,6 +4262,272 @@ struct TileModifierData {
   char _pad[4] = {};
 };
 
+/** #PatchModifierData.mode */
+enum PatchModifierMode {
+  MOD_PATCH_MODE_OVERLAY = 0,
+  MOD_PATCH_MODE_SPLIT = 1,
+};
+
+/** #PatchModifierData.layout */
+enum PatchModifierLayout {
+  MOD_PATCH_LAYOUT_VORONOI = 0,
+  MOD_PATCH_LAYOUT_GRID = 1,
+  MOD_PATCH_LAYOUT_STRIPS = 2,
+  MOD_PATCH_LAYOUT_OBJECT = 3,
+};
+
+/** #PatchModifierData.flag */
+enum PatchModifierFlag {
+  MOD_PATCH_STITCHES = (1 << 0),
+  MOD_PATCH_CUT_HOLE = (1 << 1),
+  MOD_PATCH_THICK_CLOTH = (1 << 2),
+  MOD_PATCH_PER_ISLAND = (1 << 3),
+  MOD_PATCH_INVERT_VGROUP = (1 << 4),
+};
+
+/** Patch modifier: cuts a surface into patches, lays them on or splits it, and stitches them. */
+struct PatchModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *patch_material_pick = nullptr;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *stitch_material_pick = nullptr;
+
+  /** Used for the stitches instead of the built-in box when set. */
+  struct Object *stitch_object = nullptr;
+  /** Several stitch shapes, picked at random. Used instead of #stitch_object when set. */
+  struct Collection *stitch_collection = nullptr;
+  /** Its faces, seen along its Z axis, are the pieces in the Object layout. */
+  struct Object *cut_object = nullptr;
+  /** Where patches may go. */
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** #PatchModifierMode. */
+  int mode = MOD_PATCH_MODE_OVERLAY;
+  /** #PatchModifierLayout. */
+  int layout = MOD_PATCH_LAYOUT_VORONOI;
+  int count = 20;
+  int seed = 0;
+  /** Steps that even out the Voronoi cells. */
+  int relax = 2;
+  /** 0-2 are X, Y, Z. */
+  int strip_axis = 0;
+  float grid_size[3] = {0.5f, 0.5f, 0.5f};
+  float strip_width = 0.3f;
+  /** Share of the cells that become patches in Overlay mode. */
+  float amount = 0.3f;
+  /** Space between pieces in Split mode, negative to overlap. */
+  float gap = 0.0f;
+  /** How far a patch reaches past its cell in Overlay mode. */
+  float margin = 0.05f;
+  float lift = 0.005f;
+  float lift_random = 0.0f;
+  float thickness = 0.0f;
+  /** Random shift of the border points. */
+  float jitter = 0.0f;
+  int patch_material = 1;
+  /** Number of materials the patches pick from, starting at #patch_material. */
+  int material_random = 1;
+  int stitch_material = 2;
+  /** #PatchModifierFlag. */
+  int flag = MOD_PATCH_STITCHES | MOD_PATCH_THICK_CLOTH | MOD_PATCH_PER_ISLAND;
+  float stitch_spacing = 0.1f;
+  float stitch_length = 0.08f;
+  float stitch_width = 0.02f;
+  float stitch_thickness = 0.01f;
+  /** Share of the borders that get stitches. */
+  float stitch_amount = 1.0f;
+  float stitch_size_random = 0.15f;
+  float stitch_angle_random = 0.17f;
+  /** Stretches the Voronoi pieces along each axis. */
+  float voronoi_scale[3] = {1.0f, 1.0f, 1.0f};
+  char _pad[4] = {};
+};
+
+/** #AutoWeightsModifierData.method */
+enum AutoWeightsMethod {
+  MOD_AUTOWEIGHTS_HEAT = 0,
+  MOD_AUTOWEIGHTS_DISTANCE = 1,
+};
+
+/** #AutoWeightsModifierData.flag */
+enum AutoWeightsFlag {
+  MOD_AUTOWEIGHTS_SELECTED = (1 << 0),
+  MOD_AUTOWEIGHTS_NORMALIZE = (1 << 1),
+  /** Set on the evaluated copy by the Bind operator, so the next evaluation binds. */
+  MOD_AUTOWEIGHTS_BIND_REQUEST = (1 << 2),
+};
+
+/** A bone name stored by the Auto Weights bind. */
+struct AutoWeightsBone {
+  char name[/*MAX_VGROUP_NAME*/ 64];
+};
+
+/** Auto Weights modifier: gives each deform bone of an armature its own vertex group. */
+struct AutoWeightsModifierData {
+  ModifierData modifier;
+
+  struct Object *object = nullptr;
+  /** The bones of the bind, #bind_bones_num long. */
+  AutoWeightsBone *bind_bones = nullptr;
+  /** Where each point's weights start in #bind_groups and #bind_weights, points + 1 long. */
+  int *bind_offsets = nullptr;
+  /** Index in #bind_bones of each weight. */
+  int *bind_groups = nullptr;
+  float *bind_weights = nullptr;
+  int bind_verts_num = 0;
+  int bind_bones_num = 0;
+  int bind_weights_num = 0;
+  /** #AutoWeightsMethod. */
+  int method = MOD_AUTOWEIGHTS_HEAT;
+  /** #AutoWeightsFlag. */
+  int flag = MOD_AUTOWEIGHTS_NORMALIZE;
+  /** Most bones a point may follow, zero for no limit. */
+  int max_bones = 4;
+};
+
+/** Which vertex groups the weight modifiers work on. */
+enum WeightGroupsMode {
+  MOD_WEIGHT_GROUPS_ALL = 0,
+  /** Groups named after a bone of the object's armature. */
+  MOD_WEIGHT_GROUPS_BONES = 1,
+  MOD_WEIGHT_GROUPS_SELECTED_BONES = 2,
+  MOD_WEIGHT_GROUPS_SINGLE = 3,
+};
+
+/** #SmoothWeightsModifierData.flag */
+enum SmoothWeightsFlag {
+  MOD_SMOOTHWEIGHTS_NORMALIZE = (1 << 0),
+  MOD_SMOOTHWEIGHTS_INVERT_VGROUP = (1 << 1),
+};
+
+/** Smooth Weights modifier: blurs vertex group weights along the surface. */
+struct SmoothWeightsModifierData {
+  ModifierData modifier;
+
+  /** The group smoothed in #MOD_WEIGHT_GROUPS_SINGLE. */
+  char group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** Where to smooth. */
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** #WeightGroupsMode. */
+  int groups = MOD_WEIGHT_GROUPS_BONES;
+  int iterations = 5;
+  float factor = 0.5f;
+  /** #SmoothWeightsFlag. */
+  int flag = MOD_SMOOTHWEIGHTS_NORMALIZE;
+};
+
+/** #TransferWeightsModifierData.flag */
+enum TransferWeightsFlag {
+  MOD_TRANSFERWEIGHTS_NORMALIZE = (1 << 0),
+};
+
+/** Transfer Weights modifier: copies the weights of the nearest surface of another mesh. */
+struct TransferWeightsModifierData {
+  ModifierData modifier;
+
+  struct Object *object = nullptr;
+  /** #WeightGroupsMode, without #MOD_WEIGHT_GROUPS_SINGLE. */
+  int groups = MOD_WEIGHT_GROUPS_BONES;
+  /** #TransferWeightsFlag. */
+  int flag = MOD_TRANSFERWEIGHTS_NORMALIZE;
+  /** Points farther than this take the weights of the points around them. Zero for no limit. */
+  float max_distance = 0.0f;
+  /** Smoothing steps after the transfer. */
+  int smooth = 0;
+  /** Most bones a point may follow, zero for no limit. */
+  int max_bones = 4;
+  char _pad[4] = {};
+};
+
+/** #BoneColorsModifierData.flag */
+enum BoneColorsFlag {
+  /** Left and right bones share a color. */
+  MOD_BONECOLORS_MIRROR = (1 << 0),
+};
+
+/** Bone Colors modifier: colors the mesh by the bones it follows. */
+struct BoneColorsModifierData {
+  ModifierData modifier;
+
+  int seed = 0;
+  /** #BoneColorsFlag. */
+  int flag = MOD_BONECOLORS_MIRROR;
+};
+
+/** #PackModifierData.output */
+enum PackOutput {
+  MOD_PACK_OUTPUT_GEOMETRY = 0,
+  MOD_PACK_OUTPUT_INSTANCES = 1,
+};
+
+/** #PackModifierData.mode */
+enum PackMode {
+  /** Each piece goes where it touches the most. */
+  MOD_PACK_FILL = 0,
+  /** Each piece drops to the lowest place it fits. */
+  MOD_PACK_SETTLE = 1,
+};
+
+/** #PackModifierData.rotation */
+enum PackRotation {
+  MOD_PACK_ROTATION_NONE = 0,
+  MOD_PACK_ROTATION_UPRIGHT = 1,
+  MOD_PACK_ROTATION_FREE = 2,
+  MOD_PACK_ROTATION_FOLLOW_WALLS = 3,
+};
+
+/** #PackModifierData.shape */
+enum PackShape {
+  MOD_PACK_SHAPE_KEEP = 0,
+  MOD_PACK_SHAPE_BLOCKY = 1,
+};
+
+/** #PackModifierData.flag */
+enum PackFlag {
+  MOD_PACK_KEEP_CONTAINER = (1 << 0),
+  MOD_PACK_FILL_GAPS = (1 << 1),
+};
+
+/** One more object for the Pack modifier to pack. */
+struct PackModifierObject {
+  PackModifierObject *next = nullptr, *prev = nullptr;
+  struct Object *object = nullptr;
+};
+
+/** Pack: fills the mesh's volume with copies of other objects, fitted close together. */
+struct PackModifierData {
+  ModifierData modifier;
+
+  struct Object *object = nullptr;
+  struct Collection *collection = nullptr;
+  /** More objects, #PackModifierObject. */
+  ListBaseT<PackModifierObject> objects = {nullptr, nullptr};
+  /** How many pieces, zero to fill until nothing more fits. */
+  int count = 0;
+  /** Cells along the longest side of the volume. */
+  int detail = 256;
+  int seed = 0;
+  /** #PackFlag. */
+  int flag = 0;
+  /** #PackOutput. */
+  char output = MOD_PACK_OUTPUT_GEOMETRY;
+  /** #PackMode. */
+  char mode = MOD_PACK_FILL;
+  /** #PackRotation. */
+  char rotation = MOD_PACK_ROTATION_FREE;
+  /** #PackShape. */
+  char shape = MOD_PACK_SHAPE_KEEP;
+  /** Space kept between the pieces. */
+  float gap = 0.0f;
+  /** How much the pieces get smaller at random, 0 to 1. */
+  float random_scale = 0.0f;
+  /** How far the pieces swell into the gaps, 0 to 1. */
+  float fill_amount = 1.0f;
+  /** Passes that shake the pieces closer together and fill the space they free. */
+  int shake = 2;
+  char _pad[4] = {};
+};
+
 /** #DiceModifierData.mode */
 enum DiceModifierMode {
   MOD_DICE_MODE_COUNT = 0,
@@ -3591,6 +4544,8 @@ enum DiceModifierFlag {
 /** Dice modifier. */
 struct DiceModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *interior_material_pick = nullptr;
 
   /** #DiceModifierMode. */
   char mode = MOD_DICE_MODE_COUNT;
@@ -3694,6 +4649,411 @@ struct CollapseModifierData {
   char _pad1[4] = {};
 };
 
+/** #ChiselModifierData.flag */
+enum ChiselModifierFlag {
+  /** Cut the edges across the ends of a board too. */
+  MOD_CHISEL_ENDS = (1 << 0),
+  MOD_CHISEL_INVERT_VGROUP = (1 << 1),
+};
+
+/** Chisel modifier: flat hand-cut chips on the sharp edges of boards and beams. */
+struct ChiselModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_index_pick = nullptr;
+
+  /** Cuts per meter of edge. */
+  float amount = 2.0f;
+  /** 0 makes only slants, 1 only notches. */
+  float mix = 0.5f;
+  float length_min = 0.1f;
+  float length_max = 0.4f;
+  float depth_min = 0.01f;
+  float depth_max = 0.03f;
+  /** Edges with faces turning more than this get cuts. */
+  float edge_angle = 0.5235988f;
+  int seed = 0;
+  /** Material index of the cut faces, -1 for the material of the face that was cut. */
+  int material_index = -1;
+  /** #ChiselModifierFlag. */
+  int flag = 0;
+  /** Only edges with both points in this group get cuts. */
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** Face attribute that is true on the cut faces, none when empty.
+   * MAX_CUSTOMDATA_LAYER_NAME. */
+  char cut_name[68] = "";
+  char _pad[4] = {};
+};
+
+/** #FacesetModifierData.mode */
+enum FacesetModifierMode {
+  MOD_FACESET_ISLANDS = 0,
+  MOD_FACESET_MATERIALS = 1,
+  MOD_FACESET_ANGLE = 2,
+  MOD_FACESET_SEAMS = 3,
+  MOD_FACESET_SHARP = 4,
+  MOD_FACESET_UV_ISLANDS = 5,
+};
+
+/** #FacesetModifierData.flag */
+enum FacesetModifierFlag {
+  /** Also split where the face sets the mesh already has change. */
+  MOD_FACESET_SPLIT_EXISTING = (1 << 0),
+};
+
+/** Faceset modifier: new face sets from the islands, materials, angles, seams and more. */
+struct FacesetModifierData {
+  ModifierData modifier;
+
+  /** Faces turning more than this are split, for #MOD_FACESET_ANGLE. */
+  float angle = 0.5235988f;
+  /** Changes the colors of the face sets. */
+  int seed = 0;
+  /** #FacesetModifierFlag. */
+  int flag = 0;
+  /** #FacesetModifierMode. */
+  char mode = MOD_FACESET_ISLANDS;
+  char _pad[3] = {};
+};
+
+/** #WrapModifierData.flag */
+enum WrapModifierFlag {
+  /** Where straps cross, the later one lifts over the earlier one. */
+  MOD_WRAP_CROSSINGS = (1 << 0),
+  /** The earlier strap lifts over the later one instead. */
+  MOD_WRAP_CROSSINGS_FLIP = (1 << 1),
+  MOD_WRAP_INVERT_VGROUP = (1 << 2),
+  /** Output only the pattern lines, used to turn them into edges. */
+  MOD_WRAP_LINES_ONLY = (1 << 3),
+};
+
+/** #WrapModifierData.lines */
+enum WrapModifierLines {
+  MOD_WRAP_LINES_EDGES = 0,
+  MOD_WRAP_LINES_PATTERN = 1,
+  MOD_WRAP_LINES_BOTH = 2,
+};
+
+/** #WrapModifierData.pattern */
+enum WrapModifierPattern {
+  MOD_WRAP_PATTERN_SPIRAL = 0,
+  MOD_WRAP_PATTERN_CROSS = 1,
+  MOD_WRAP_PATTERN_RINGS = 2,
+  MOD_WRAP_PATTERN_BANDS = 3,
+  MOD_WRAP_PATTERN_RANDOM = 4,
+};
+
+/** #WrapModifierData.shape */
+enum WrapModifierShape {
+  MOD_WRAP_SHAPE_STRAP = 0,
+  MOD_WRAP_SHAPE_TUBE = 1,
+  MOD_WRAP_SHAPE_ROPE = 2,
+};
+
+/** #WrapModifierData.end_cut */
+enum WrapModifierEndCut {
+  MOD_WRAP_END_FLAT = 0,
+  MOD_WRAP_END_SLANT = 1,
+  MOD_WRAP_END_NOTCH = 2,
+};
+
+/** Wrap modifier: straps, tubes and ropes laid over a surface along drawn or pattern lines. */
+struct WrapModifierData {
+  ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_index_pick = nullptr;
+
+  /** The object wrapped. Without one, the mesh's own faces are wrapped by its loose edges. */
+  struct Object *target = nullptr;
+  float width = 0.05f;
+  float thickness = 0.005f;
+  /** Rope turns per meter. */
+  float twist = 4.0f;
+  float gap = 0.0f;
+  float step = 0.02f;
+  float tight = 0.5f;
+  float width_random = 0.0f;
+  /** In strap widths. */
+  float end_cut_depth = 1.0f;
+  float turns = 3.0f;
+  float tilt = 0.0f;
+  float start = 0.1f;
+  float end = 0.9f;
+  /** Gap between the rings of a band, in strap widths. */
+  float spacing = 1.5f;
+  float random = 0.0f;
+  float wobble = 0.0f;
+  int seed = 0;
+  int count = 1;
+  int strands = 3;
+  int resolution = 8;
+  /** Rings in each band. */
+  int group = 2;
+  short material_index = 0;
+  /** #WrapModifierFlag. */
+  short flag = MOD_WRAP_CROSSINGS;
+  /** #WrapModifierLines. */
+  char lines = MOD_WRAP_LINES_EDGES;
+  /** #WrapModifierPattern. */
+  char pattern = MOD_WRAP_PATTERN_SPIRAL;
+  /** 0 is the longest side, 1 to 3 are X, Y and Z. */
+  char axis = 0;
+  /** #WrapModifierShape. */
+  char shape = MOD_WRAP_SHAPE_STRAP;
+  /** #WrapModifierEndCut. */
+  char end_cut = MOD_WRAP_END_FLAT;
+  char _pad[7] = {};
+  /** Points in this group keep their drawn place. */
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+};
+
+/** #PlaceModifierData.source and #ScatterModifierData.source, the same values as #ArraySource. */
+enum PlaceSource {
+  MOD_PLACE_SOURCE_COLLECTION = 1,
+  MOD_PLACE_SOURCE_OBJECTS = 2,
+};
+
+/** #PlaceModifierData.pick and #ScatterModifierData.pick */
+enum PlacePick {
+  /** A typed pattern of list numbers, or the list's counts in order. */
+  MOD_PLACE_PICK_PATTERN = 0,
+  /** A random object by its weight, from the seed. */
+  MOD_PLACE_PICK_RANDOM = 1,
+  /** The objects one after another. */
+  MOD_PLACE_PICK_IN_ORDER = 2,
+};
+
+/** #PlaceModifierData.mode */
+enum PlaceModifierMode {
+  MOD_PLACE_EDGES = 0,
+  MOD_PLACE_FACES = 1,
+  MOD_PLACE_VERTICES = 2,
+};
+
+/** #PlaceModifierData.edges */
+enum PlaceModifierEdges {
+  MOD_PLACE_EDGES_ALL = 0,
+  MOD_PLACE_EDGES_BOUNDARY = 1,
+  MOD_PLACE_EDGES_LOOSE = 2,
+};
+
+/** #PlaceModifierData.fit */
+enum PlaceModifierFit {
+  /** No piece where there is no room for it. */
+  MOD_PLACE_FIT_STOP = 0,
+  /** The room left over is shared out over the gaps. */
+  MOD_PLACE_FIT_SPREAD = 1,
+  /** The pieces are made longer to fill the path. */
+  MOD_PLACE_FIT_STRETCH = 2,
+  /** The last piece may stick out past the end. */
+  MOD_PLACE_FIT_OVERHANG = 3,
+};
+
+/** #PlaceModifierData.corners */
+enum PlaceModifierCorners {
+  MOD_PLACE_CORNERS_TOUCH = 0,
+  MOD_PLACE_CORNERS_PULL_BACK = 1,
+  MOD_PLACE_CORNERS_OBJECT = 2,
+};
+
+/** #PlaceModifierData.up and #ScatterModifierData.up */
+enum PlaceUp {
+  MOD_PLACE_UP_Z = 0,
+  MOD_PLACE_UP_NORMAL = 1,
+};
+
+/** #PlaceModifierData.base and #ScatterModifierData.base */
+enum PlaceBase {
+  MOD_PLACE_BASE_BOTTOM = 0,
+  MOD_PLACE_BASE_CENTER = 1,
+};
+
+/** #PlaceModifierData.side */
+enum PlaceSide {
+  MOD_PLACE_SIDE_CENTER = 0,
+  MOD_PLACE_SIDE_INSIDE = 1,
+  MOD_PLACE_SIDE_OUTSIDE = 2,
+};
+
+/** #PlaceModifierData.flag */
+enum PlaceModifierFlag {
+  MOD_PLACE_INVERT_VGROUP = (1 << 0),
+  /** Each path starts the pattern over. */
+  MOD_PLACE_RESTART_PATH = (1 << 1),
+  MOD_PLACE_KEEP_MESH = (1 << 2),
+  MOD_PLACE_REALIZE = (1 << 3),
+  /** In Faces mode, objects are scaled to the face. */
+  MOD_PLACE_FIT_FACE = (1 << 4),
+};
+
+/** Place modifier: objects along the edges, on the faces or on the vertices, by a pattern. */
+struct PlaceModifierData {
+  ModifierData modifier;
+
+  /** Objects to place for #MOD_PLACE_SOURCE_COLLECTION. */
+  struct Collection *collection = nullptr;
+  /** Objects to place for #MOD_PLACE_SOURCE_OBJECTS, #ArraySourceObject. */
+  ListBaseT<ArraySourceObject> objects = {nullptr, nullptr};
+  /** Placed on the corners for #MOD_PLACE_CORNERS_OBJECT. */
+  struct Object *corner_object = nullptr;
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** List numbers, like "1 1 1 2" or "1x3 2". Empty uses the counts in the list. */
+  char pattern[128] = "";
+  float gap = 0.0f;
+  /** Paths break where they turn more than this. */
+  float corner_angle = 0.523599f;
+  float offset = 0.0f;
+  float rotation_random = 0.0f;
+  float tilt_random = 0.0f;
+  float scale_min = 1.0f;
+  float scale_max = 1.0f;
+  float height_min = 1.0f;
+  float height_max = 1.0f;
+  int seed = 0;
+  /** #PlaceModifierFlag. */
+  int flag = MOD_PLACE_KEEP_MESH | MOD_PLACE_REALIZE;
+  /** Objects from the last evaluation, shown in the panel. */
+  int count_num = 0;
+  /** #PlaceModifierMode. */
+  char mode = MOD_PLACE_EDGES;
+  /** #PlaceSource. */
+  char source = MOD_PLACE_SOURCE_COLLECTION;
+  /** #PlacePick. */
+  char pick = MOD_PLACE_PICK_PATTERN;
+  /** #PlaceModifierEdges. */
+  char edges = MOD_PLACE_EDGES_ALL;
+  /** The object axis that follows the edge: 0 is X, 1 is Y. */
+  char along = 0;
+  /** #PlaceUp. */
+  char up = MOD_PLACE_UP_Z;
+  /** #PlaceBase. */
+  char base = MOD_PLACE_BASE_BOTTOM;
+  /** #PlaceSide. */
+  char side = MOD_PLACE_SIDE_CENTER;
+  /** #PlaceModifierFit. */
+  char fit = MOD_PLACE_FIT_STOP;
+  /** #PlaceModifierCorners. */
+  char corners = MOD_PLACE_CORNERS_TOUCH;
+  char _pad[6] = {};
+};
+
+/** #ScatterModifierData.amount */
+enum ScatterModifierAmount {
+  /** Objects per square meter. */
+  MOD_SCATTER_DENSITY = 0,
+  /** A fixed number of objects. */
+  MOD_SCATTER_COUNT = 1,
+};
+
+/** #ScatterModifierData.flag */
+enum ScatterModifierFlag {
+  MOD_SCATTER_INVERT_VGROUP = (1 << 0),
+  MOD_SCATTER_KEEP_MESH = (1 << 1),
+  MOD_SCATTER_REALIZE = (1 << 2),
+  /** Objects keep apart by their measured size. */
+  MOD_SCATTER_NO_OVERLAP = (1 << 3),
+};
+
+/** Scatter modifier: objects at random spots on the faces. */
+struct ScatterModifierData {
+  ModifierData modifier;
+
+  /** Objects to place for #MOD_PLACE_SOURCE_COLLECTION. */
+  struct Collection *collection = nullptr;
+  /** Objects to place for #MOD_PLACE_SOURCE_OBJECTS, #ArraySourceObject. */
+  ListBaseT<ArraySourceObject> objects = {nullptr, nullptr};
+  /** Weights are the chance of an object at each spot. */
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** List numbers, like "1 1 1 2" or "1x3 2". Empty uses the counts in the list. */
+  char pattern[128] = "";
+  /** Objects per square meter. */
+  float density = 10.0f;
+  /** Least distance between objects. */
+  float spacing = 0.0f;
+  float offset = 0.0f;
+  float rotation_random = 3.14159265f;
+  float tilt_random = 0.0f;
+  float scale_min = 1.0f;
+  float scale_max = 1.0f;
+  float height_min = 1.0f;
+  float height_max = 1.0f;
+  int count = 100;
+  int max_count = 10000;
+  int seed = 0;
+  /** #ScatterModifierFlag. */
+  int flag = MOD_SCATTER_KEEP_MESH | MOD_SCATTER_REALIZE;
+  /** Objects from the last evaluation, shown in the panel. */
+  int count_num = 0;
+  /** #PlaceSource. */
+  char source = MOD_PLACE_SOURCE_COLLECTION;
+  /** #PlacePick. */
+  char pick = MOD_PLACE_PICK_RANDOM;
+  /** #ScatterModifierAmount. */
+  char amount = MOD_SCATTER_DENSITY;
+  /** #PlaceUp. */
+  char up = MOD_PLACE_UP_NORMAL;
+  /** #PlaceBase. */
+  char base = MOD_PLACE_BASE_BOTTOM;
+  char _pad[3] = {};
+};
+
+/** #LeanModifierData.flag */
+enum LeanModifierFlag {
+  MOD_LEAN_INVERT_VGROUP = (1 << 0),
+  /** Collide with the pusher's faces instead of its convex hull. */
+  MOD_LEAN_PUSHER_MESH = (1 << 1),
+  /** Take the pusher away after the push, so the pieces settle by themselves. */
+  MOD_LEAN_RELEASE = (1 << 2),
+};
+
+/** #LeanModifierData.pieces */
+enum LeanModifierPieces {
+  MOD_LEAN_PIECES_ISLANDS = 0,
+  MOD_LEAN_PIECES_ATTRIBUTE = 1,
+  /** The face sets of the mesh. */
+  MOD_LEAN_PIECES_FACE_SETS = 2,
+};
+
+/** Lean modifier: an object pushes rigid pieces aside, glue keeps them from crumbling. */
+struct LeanModifierData {
+  ModifierData modifier;
+
+  /** What pushes, it ends where it is placed. */
+  struct Object *pusher = nullptr;
+  /** What the pieces stand on. When unset, a flat floor under the lowest point. */
+  struct Object *target = nullptr;
+  /** More objects and collections to stand on, with #target. */
+  ListBaseT<ModifierColliderSource> colliders = {nullptr, nullptr};
+  /** Pieces with points in this group stay where they are. */
+  char vertex_group[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** The pusher moves along this, in world space. */
+  float direction[3] = {1.0f, 0.0f, 0.0f};
+  float distance = 1.0f;
+  /** Seconds the pusher takes to move. */
+  float push_time = 1.0f;
+  /** Seconds the pieces get to come to rest after the push. */
+  float settle_time = 1.0f;
+  /** How strongly touching pieces hold together, 0 for loose pieces. */
+  float glue = 0.3f;
+  float friction = 0.8f;
+  float gravity = 9.81f;
+  /** The ground is pushed out along its normals by this much. */
+  float cage = 0.0f;
+  /** Solver steps per 1/60 second. */
+  int substeps = 4;
+  /** #LeanModifierFlag. */
+  int flag = 0;
+  /** #LeanModifierPieces. */
+  char pieces = MOD_LEAN_PIECES_ISLANDS;
+  char _pad[3] = {};
+  /** Attribute with the piece of each face or point. MAX_CUSTOMDATA_LAYER_NAME. */
+  char piece_name[68] = "piece";
+  /** Point attribute with how far each piece moved, none when empty.
+   * MAX_CUSTOMDATA_LAYER_NAME. */
+  char moved_name[68] = "";
+  char _pad1[4] = {};
+};
+
 /** #DrapeModifierData.flag */
 enum DrapeModifierFlag {
   MOD_DRAPE_INVERT_VGROUP = (1 << 0),
@@ -3739,6 +5099,8 @@ enum ShatterModifierFlag {
 /** Shatter modifier: breaks a closed mesh the way a material breaks. */
 struct ShatterModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *interior_material_pick = nullptr;
 
   /** Where it was hit. The middle of the mesh when unset. */
   struct Object *impact = nullptr;
@@ -3763,17 +5125,22 @@ struct ShatterModifierData {
 
 /** #MasonryModifierData.flag */
 enum MasonryModifierFlag {
-  MOD_MASONRY_BACKING = (1 << 0),
+  /** No longer used: the faces under the blocks are always removed. */
+  MOD_MASONRY_BACKING_DEPRECATED = (1 << 0),
   MOD_MASONRY_BORDER = (1 << 1),
   MOD_MASONRY_TOOTHED = (1 << 2),
   MOD_MASONRY_INVERT_VGROUP = (1 << 3),
   MOD_MASONRY_MATERIALS = (1 << 4),
   MOD_MASONRY_CONTINUOUS_WALLS = (1 << 5),
+  /** The layers are centered on the face. */
+  MOD_MASONRY_CENTERED = (1 << 6),
 };
 
 /** Masonry modifier: covers faces with blocks in a brick, stone or paving pattern. */
 struct MasonryModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *block_material_pick = nullptr;
 
   /** Center of the Fan and Radial patterns. The middle of the mesh when unset. */
   struct Object *center = nullptr;
@@ -3784,6 +5151,7 @@ struct MasonryModifierData {
   /** #geometry::MasonryDirection. */
   char direction = 0;
   short block_material = 0;
+  /** No longer used. */
   short mortar_material = 1;
   short soldier_rows = 0;
   float length = 0.3f;
@@ -3800,7 +5168,40 @@ struct MasonryModifierData {
   float dome = 0.0f;
   int seed = 0;
   /** #MasonryModifierFlag. */
-  int flag = MOD_MASONRY_BACKING;
+  int flag = 0;
+  /** Layers of blocks through the thickness, each shifted half a block from the one before. */
+  int layers = 1;
+  /** Space between the layers. */
+  float layer_gap = 0.01f;
+  /** Share of the blocks removed by #damage, 0 to 1. */
+  float damage_amount = 0.3f;
+  /** Size of the damage noise. */
+  float damage_size = 1.0f;
+  /** With #MOD_MASONRY_DAMAGE_BOTH, how much the noise breaks up the gradient. */
+  float damage_mix = 0.5f;
+  /** #MasonryDamage. */
+  char damage = 0;
+  /** #MasonryDamageDirection: where the gradient removes the most. */
+  char damage_direction = 4;
+  char _pad1[2] = {};
+};
+
+/** #MasonryModifierData.damage */
+enum MasonryDamage {
+  MOD_MASONRY_DAMAGE_NONE = 0,
+  MOD_MASONRY_DAMAGE_NOISE = 1,
+  MOD_MASONRY_DAMAGE_GRADIENT = 2,
+  MOD_MASONRY_DAMAGE_BOTH = 3,
+};
+
+/** #MasonryModifierData.damage_direction */
+enum MasonryDamageDirection {
+  MOD_MASONRY_DAMAGE_POS_X = 0,
+  MOD_MASONRY_DAMAGE_NEG_X = 1,
+  MOD_MASONRY_DAMAGE_POS_Y = 2,
+  MOD_MASONRY_DAMAGE_NEG_Y = 3,
+  MOD_MASONRY_DAMAGE_POS_Z = 4,
+  MOD_MASONRY_DAMAGE_NEG_Z = 5,
 };
 
 /** #CleanupModifierData.flag */
@@ -3865,6 +5266,10 @@ enum StoneworkModifierSource {
 /** Stonework modifier: fills the mesh with whole stones, stacked from the bottom up. */
 struct StoneworkModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *material_index_pick = nullptr;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *mortar_material_index_pick = nullptr;
 
   /** Own stones, when #source is #MOD_STONEWORK_SOURCE_COLLECTION. */
   struct Collection *collection = nullptr;
@@ -3922,6 +5327,8 @@ enum DistributeModifierFlag {
 /** Distribute modifier: objects from a collection packed on the faces by their sides. */
 struct DistributeModifierData {
   ModifierData modifier;
+  /** Used instead of the slot number when set, added to the materials when missing. */
+  struct Material *mortar_material_index_pick = nullptr;
 
   struct Collection *collection = nullptr;
   /** Small objects for the gaps. */

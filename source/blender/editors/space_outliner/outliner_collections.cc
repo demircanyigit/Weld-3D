@@ -40,6 +40,7 @@
 #include "RNA_enum_types.hh"
 
 #include "outliner_intern.hh" /* own include */
+#include "tree/tree_iterator.hh"
 
 namespace blender {
 
@@ -1655,6 +1656,64 @@ void OUTLINER_OT_collection_color_tag_set(wmOperatorType *ot)
   /* API callbacks. */
   ot->exec = outliner_color_tag_set_exec;
   ot->poll = ED_outliner_collections_editor_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_enum(
+      ot->srna, "color", rna_enum_collection_color_items, COLLECTION_COLOR_NONE, "Color Tag", "");
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Color Tags (Weld 3D)
+ * \{ */
+
+static wmOperatorStatus outliner_object_color_tag_set_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+  const int color_tag = RNA_enum_get(op->ptr, "color");
+
+  Set<Object *> objects;
+  tree_iterator::all(*space_outliner, [&](TreeElement *te) {
+    TreeStoreElem *tselem = TREESTORE(te);
+    if ((tselem->flag & TSE_SELECTED) && (tselem->type == TSE_SOME_ID) && tselem->id &&
+        GS(tselem->id->name) == ID_OB)
+    {
+      objects.add(reinterpret_cast<Object *>(tselem->id));
+    }
+  });
+
+  int changed = 0;
+  for (Object *ob : objects) {
+    if (!BKE_id_is_editable(bmain, &ob->id)) {
+      BKE_report(op->reports, RPT_WARNING, "Cannot add a color tag to a linked object");
+      continue;
+    }
+    ob->outliner_color = char(color_tag + 1);
+    changed++;
+  }
+  if (changed == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, nullptr);
+  ED_region_tag_redraw_no_rebuild(CTX_wm_region(C));
+  return OPERATOR_FINISHED;
+}
+
+void OUTLINER_OT_object_color_tag_set(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Set Color Tag";
+  ot->idname = "OUTLINER_OT_object_color_tag_set";
+  ot->description = "Set a color tag for the selected objects";
+
+  /* API callbacks. */
+  ot->exec = outliner_object_color_tag_set_exec;
+  ot->poll = ED_operator_region_outliner_active;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

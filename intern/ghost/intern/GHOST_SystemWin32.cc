@@ -170,6 +170,10 @@ GHOST_SystemWin32::GHOST_SystemWin32() : has_performance_counter_(false), freq_(
    * blurry scaling and enables WM_DPICHANGED to allow us to draw at proper DPI. */
   SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
+  /* While a long update keeps the window from answering, Windows would swap it for a faded
+   * "Not Responding" copy and offer to close Blender. Keep the real window, Esc stops the
+   * update instead. */
+  DisableProcessWindowsGhosting();
   /* Set App Id for the process so our console will be grouped on the Task Bar. */
   UTF16_ENCODE(BLENDER_WIN_APPID);
   SetCurrentProcessExplicitAppUserModelID(BLENDER_WIN_APPID_16);

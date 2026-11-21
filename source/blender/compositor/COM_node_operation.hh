@@ -35,6 +35,8 @@ class NodeOperation : public Operation {
   /* A map that associates each node instance identified by its node instance key to its node
    * preview. This could be nullptr if node previews are not needed. */
   Map<bNodeInstanceKey, bke::bNodePreview> *node_previews_ = nullptr;
+  /* Output computed only to be previewed, released after the preview is made. */
+  Result *preview_only_result_ = nullptr;
 
  public:
   /* Populate the output results based on the node outputs and populate the input descriptors based
@@ -71,6 +73,9 @@ class NodeOperation : public Operation {
    * of the node, if no outputs exist, then the first allocated input will be chosen. Returns
    * nullptr if no result is viewable. */
   Result *get_preview_result();
+
+  /* Make the preview of the node, and release the output only made for it. */
+  void make_preview();
 };
 
 }  // namespace blender::compositor

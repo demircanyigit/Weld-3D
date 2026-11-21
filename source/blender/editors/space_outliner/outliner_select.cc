@@ -1973,8 +1973,9 @@ static void outliner_box_select(bContext *C,
                                 const rctf *rectf,
                                 const bool select)
 {
+  outliner_row_height_set(space_outliner);
   tree_iterator::all_open(*space_outliner, [&](TreeElement *te) {
-    if (te->ys <= rectf->ymax && te->ys + UI_UNIT_Y >= rectf->ymin) {
+    if (te->ys <= rectf->ymax && te->ys + OL_ROWH >= rectf->ymin) {
       outliner_item_select(
           C, space_outliner, te, (select ? OL_ITEM_SELECT : OL_ITEM_DESELECT) | OL_ITEM_EXTEND);
     }
@@ -2228,7 +2229,7 @@ static TreeElement *find_walk_select_start_element(SpaceOutliner *space_outliner
 static void outliner_walk_scroll(SpaceOutliner *space_outliner, ARegion *region, TreeElement *te)
 {
   /* Account for the header height */
-  int y_max = region->v2d.cur.ymax - UI_UNIT_Y;
+  int y_max = region->v2d.cur.ymax - OL_ROWH;
   int y_min = region->v2d.cur.ymin;
 
   /* Scroll if walked position is beyond the border */

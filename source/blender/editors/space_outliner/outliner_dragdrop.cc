@@ -8,6 +8,8 @@
 
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_collection_types.h"
@@ -58,7 +60,7 @@ static TreeElement *outliner_dropzone_element(TreeElement *te,
                                               const float fmval[2],
                                               const bool children)
 {
-  if ((fmval[1] > te->ys) && (fmval[1] < (te->ys + UI_UNIT_Y))) {
+  if ((fmval[1] > te->ys) && (fmval[1] < (te->ys + OL_ROWH))) {
     /* name and first icon */
     if ((fmval[0] > te->xs + UI_UNIT_X) && (fmval[0] < te->xend)) {
       return te;
@@ -136,7 +138,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
   if (te_hovered) {
     /* Mouse hovers an element (ignoring x-axis),
      * now find out how to insert the dragged item exactly. */
-    const float margin = UI_UNIT_Y * (1.0f / 4);
+    const float margin = OL_ROWH * (1.0f / 4);
 
     if (view_mval[1] < (te_hovered->ys + margin)) {
       if (TSELEM_OPEN(TREESTORE(te_hovered), space_outliner) &&
@@ -170,7 +172,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
     *r_insert_type = TE_INSERT_AFTER;
     return last;
   }
-  if (view_mval[1] > (first->ys + UI_UNIT_Y)) {
+  if (view_mval[1] > (first->ys + OL_ROWH)) {
     *r_insert_type = TE_INSERT_BEFORE;
     return first;
   }
@@ -325,6 +327,32 @@ static bool allow_parenting_without_modifier_key(SpaceOutliner *space_outliner)
   }
 }
 
+/**
+ * Weld 3D: the object row to parent to. With Shift (or in views without collections) any part of
+ * the name works, as before. Otherwise the middle of an object row parents, and its top and bottom
+ * edges are left to the reorder drop.
+ */
+static TreeElement *parent_drop_target_find(bContext *C, const wmEvent *event)
+{
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+  if ((event->modifier & KM_SHIFT) || allow_parenting_without_modifier_key(space_outliner)) {
+    return outliner_drop_find(C, event);
+  }
+  if (space_outliner->outlinevis != SO_VIEW_LAYER) {
+    return nullptr;
+  }
+  TreeElementInsertType insert_type;
+  TreeElement *te = outliner_drop_insert_find(C, event->xy, &insert_type);
+  if (te == nullptr || insert_type != TE_INSERT_INTO) {
+    return nullptr;
+  }
+  TreeStoreElem *tselem = TREESTORE(te);
+  if ((te->idcode != ID_OB) || (tselem->type != TSE_SOME_ID)) {
+    return nullptr;
+  }
+  return te;
+}
+
 static bool parent_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -339,13 +367,7 @@ static bool parent_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
     return false;
   }
 
-  if (!allow_parenting_without_modifier_key(space_outliner)) {
-    if ((event->modifier & KM_SHIFT) == 0) {
-      return false;
-    }
-  }
-
-  TreeElement *te = outliner_drop_find(C, event);
+  TreeElement *te = parent_drop_target_find(C, event);
   if (!te) {
     return false;
   }
@@ -414,9 +436,26 @@ static void parent_drop_set_parents(bContext *C,
   }
 }
 
+static std::string parent_drop_tooltip(bContext *C,
+                                       wmDrag * /*drag*/,
+                                       const int /*xy*/[2],
+                                       wmDropBox * /*drop*/)
+{
+  wmWindow *win = CTX_wm_window(C);
+  const wmEvent *event = win ? win->runtime->eventstate : nullptr;
+  if (event == nullptr) {
+    return {};
+  }
+  TreeElement *te = parent_drop_target_find(C, event);
+  if (te == nullptr || TREESTORE(te)->id == nullptr) {
+    return {};
+  }
+  return fmt::format(fmt::runtime(TIP_("Parent to {}")), TREESTORE(te)->id->name + 2);
+}
+
 static wmOperatorStatus parent_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  TreeElement *te = outliner_drop_find(C, event);
+  TreeElement *te = parent_drop_target_find(C, event);
   TreeStoreElem *tselem = te ? TREESTORE(te) : nullptr;
 
   if (!(te && (te->idcode == ID_OB) && (tselem->type == TSE_SOME_ID))) {
@@ -1102,6 +1141,257 @@ void OUTLINER_OT_datastack_drop(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Object Reorder Drop Operator (Weld 3D)
+ *
+ * Dropping objects on the top or bottom edge of an object row moves them before or after it.
+ * The order is the object list of the collection, which the outliner shows when it does not
+ * sort by name. The dropped objects also take the parent of the row they were dropped next to.
+ * \{ */
+
+struct ObjectReorderDrop {
+  TreeElement *te = nullptr;
+  Object *target = nullptr;
+  Collection *to = nullptr;
+  Object *new_parent = nullptr;
+  bool after = false;
+};
+
+static bool object_reorder_drop_init(bContext *C,
+                                     wmDrag *drag,
+                                     const int xy[2],
+                                     const wmEvent *event,
+                                     ObjectReorderDrop *data)
+{
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+  if (space_outliner == nullptr || space_outliner->outlinevis != SO_VIEW_LAYER ||
+      (space_outliner->filter & SO_FILTER_NO_COLLECTION))
+  {
+    return false;
+  }
+  if (event && (event->modifier & KM_SHIFT)) {
+    /* Shift always parents. */
+    return false;
+  }
+  if (drag->type != WM_DRAG_ID) {
+    return false;
+  }
+  wmDragID *drag_first = static_cast<wmDragID *>(drag->ids.first);
+  if (drag_first == nullptr || drag_first->id == nullptr || GS(drag_first->id->name) != ID_OB) {
+    return false;
+  }
+
+  TreeElementInsertType insert_type;
+  TreeElement *te = outliner_drop_insert_find(C, xy, &insert_type);
+  if (te == nullptr || !ELEM(insert_type, TE_INSERT_BEFORE, TE_INSERT_AFTER)) {
+    return false;
+  }
+  if (!is_object_element(te) || (te->flag & TE_CHILD_NOT_IN_COLLECTION)) {
+    return false;
+  }
+
+  TreeElement *collection_te = outliner_data_from_tree_element_and_parents(is_collection_element,
+                                                                           te);
+  if (collection_te == nullptr) {
+    return false;
+  }
+  Collection *to = outliner_collection_from_tree_element(collection_te);
+  if (to == nullptr || !ID_IS_EDITABLE(to) || ID_IS_OVERRIDE_LIBRARY(to)) {
+    return false;
+  }
+
+  Object *target = id_cast<Object *>(TREESTORE(te)->id);
+  Object *new_parent = nullptr;
+  if (te->parent && is_object_element(te->parent)) {
+    new_parent = id_cast<Object *>(TREESTORE(te->parent)->id);
+  }
+
+  for (wmDragID &drag_id : drag->ids) {
+    if (drag_id.id == nullptr || GS(drag_id.id->name) != ID_OB) {
+      return false;
+    }
+    Object *ob = id_cast<Object *>(drag_id.id);
+    if (ob == target) {
+      return false;
+    }
+    /* Can't become a child of itself or of one of its own children. */
+    if (new_parent && (new_parent == ob || BKE_object_is_child_recursive(ob, new_parent))) {
+      return false;
+    }
+  }
+
+  data->te = te;
+  data->target = target;
+  data->to = to;
+  data->new_parent = new_parent;
+  data->after = (insert_type == TE_INSERT_AFTER);
+  return true;
+}
+
+static bool object_reorder_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+  ARegion *region = CTX_wm_region(C);
+  bool changed = outliner_flag_set(*space_outliner, TSE_HIGHLIGHTED_ANY | TSE_DRAG_ANY, false);
+
+  ObjectReorderDrop data;
+  if (object_reorder_drop_init(C, drag, event->xy, event, &data)) {
+    TREESTORE(data.te)->flag |= data.after ? TSE_DRAG_AFTER : TSE_DRAG_BEFORE;
+    ED_region_tag_redraw_no_rebuild(region);
+    return true;
+  }
+  if (changed) {
+    ED_region_tag_redraw_no_rebuild(region);
+  }
+  return false;
+}
+
+static std::string object_reorder_drop_tooltip(bContext *C,
+                                               wmDrag *drag,
+                                               const int xy[2],
+                                               wmDropBox * /*drop*/)
+{
+  wmWindow *win = CTX_wm_window(C);
+  const wmEvent *event = win ? win->runtime->eventstate : nullptr;
+
+  ObjectReorderDrop data;
+  if (!object_reorder_drop_init(C, drag, xy, event, &data)) {
+    return {};
+  }
+  const char *target_name = data.target->id.name + 2;
+  std::string tip = fmt::format(
+      fmt::runtime(data.after ? TIP_("Move After {}") : TIP_("Move Before {}")), target_name);
+
+  wmDragID *drag_first = static_cast<wmDragID *>(drag->ids.first);
+  Object *ob = id_cast<Object *>(drag_first->id);
+  if (ob->parent != data.new_parent) {
+    if (data.new_parent) {
+      tip += fmt::format(fmt::runtime(TIP_(", Parent to {}")), data.new_parent->id.name + 2);
+    }
+    else {
+      tip += TIP_(", Clear Parent");
+    }
+  }
+  return tip;
+}
+
+static wmOperatorStatus object_reorder_drop_invoke(bContext *C,
+                                                   wmOperator *op,
+                                                   const wmEvent *event)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+
+  if (event->custom != EVT_DATA_DRAGDROP) {
+    return OPERATOR_CANCELLED;
+  }
+  ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
+  wmDrag *drag = static_cast<wmDrag *>(lb->first);
+
+  ObjectReorderDrop data;
+  if (!object_reorder_drop_init(C, drag, event->xy, event, &data)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Insert one by one next to the target; reversed for "after" so the dragged order is kept. */
+  if (data.after) {
+    BLI_listbase_reverse(&drag->ids);
+  }
+
+  const bool keep_transform = (event->modifier & KM_ALT) == 0;
+  bool parent_changed = false;
+  bool linked_objects = false;
+
+  for (wmDragID &drag_id : drag->ids) {
+    Object *ob = id_cast<Object *>(drag_id.id);
+    if (!BKE_id_is_editable(bmain, &ob->id)) {
+      linked_objects = true;
+      continue;
+    }
+
+    /* Into the collection of the row, unless it is already there. Ctrl links. */
+    if (!BKE_collection_has_object(data.to, ob)) {
+      Collection *from = (event->modifier & KM_CTRL) ?
+                             nullptr :
+                             collection_parent_from_ID(drag_id.from_parent);
+      if (from) {
+        BKE_collection_object_move(bmain, scene, data.to, from, ob);
+        DEG_id_tag_update(&from->id,
+                          ID_RECALC_SYNC_TO_EVAL | ID_RECALC_GEOMETRY | ID_RECALC_HIERARCHY);
+      }
+      else {
+        BKE_collection_object_add(bmain, data.to, ob);
+      }
+    }
+
+    /* Take the parent of the row it was dropped next to. */
+    if (ob->parent != data.new_parent) {
+      if (data.new_parent) {
+        if (object::parent_set(op->reports,
+                               C,
+                               scene,
+                               ob,
+                               data.new_parent,
+                               object::PAR_OBJECT,
+                               false,
+                               keep_transform,
+                               nullptr))
+        {
+          parent_changed = true;
+        }
+      }
+      else {
+        object::parent_clear(ob,
+                             keep_transform ? object::CLEAR_PARENT_KEEP_TRANSFORM :
+                                              object::CLEAR_PARENT_ALL);
+        parent_changed = true;
+      }
+    }
+
+    BKE_collection_object_reorder(bmain, data.to, ob, data.target, data.after);
+  }
+
+  if (linked_objects) {
+    BKE_report(
+        op->reports, RPT_INFO, "Cannot edit library linked or non-editable override object(s)");
+  }
+
+  /* A name sort would undo the move right away, so show the manual order. */
+  if ((space_outliner->flag & SO_SKIP_SORT_ALPHA) == 0) {
+    space_outliner->flag |= SO_SKIP_SORT_ALPHA;
+    BKE_report(op->reports, RPT_INFO, "Sort by name turned off to keep this order");
+  }
+
+  DEG_id_tag_update(&data.to->id, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_HIERARCHY);
+  DEG_relations_tag_update(bmain);
+  WM_event_add_notifier_ex(CTX_wm_manager(C), nullptr, NC_SCENE | ND_LAYER, nullptr);
+  if (parent_changed) {
+    WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_PARENT, nullptr);
+  }
+  ED_area_tag_redraw(CTX_wm_area(C));
+
+  return OPERATOR_FINISHED;
+}
+
+void OUTLINER_OT_object_reorder_drop(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Move Object";
+  ot->description = "Drag to move objects to another place in the Outliner";
+  ot->idname = "OUTLINER_OT_object_reorder_drop";
+
+  /* API callbacks. */
+  ot->invoke = object_reorder_drop_invoke;
+  ot->poll = ED_operator_outliner_active;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Collection Drop Operator
  * \{ */
 
@@ -1285,7 +1575,7 @@ static std::string collection_drop_tooltip(bContext *C,
         wmDragID *drag_id = static_cast<wmDragID *>(drag->ids.first);
         const bool is_object = (GS(drag_id->id->name) == ID_OB);
         if (is_object) {
-          return TIP_("Move inside collection (Ctrl to link, Shift to parent)");
+          return TIP_("Move inside collection (Ctrl to link)");
         }
         return TIP_("Move inside collection (Ctrl to link)");
       }
@@ -1593,7 +1883,8 @@ void outliner_dropboxes()
 {
   ListBaseT<wmDropBox> *lb = WM_dropboxmap_find("Outliner", SPACE_OUTLINER, RGN_TYPE_WINDOW);
 
-  WM_dropbox_add(lb, "OUTLINER_OT_parent_drop", parent_drop_poll, nullptr, nullptr, nullptr);
+  WM_dropbox_add(
+      lb, "OUTLINER_OT_parent_drop", parent_drop_poll, nullptr, nullptr, parent_drop_tooltip);
   WM_dropbox_add(lb, "OUTLINER_OT_parent_clear", parent_clear_poll, nullptr, nullptr, nullptr);
   WM_dropbox_add(lb, "OUTLINER_OT_scene_drop", scene_drop_poll, nullptr, nullptr, nullptr);
   WM_dropbox_add(lb, "OUTLINER_OT_material_drop", material_drop_poll, nullptr, nullptr, nullptr);
@@ -1603,6 +1894,12 @@ void outliner_dropboxes()
                  nullptr,
                  nullptr,
                  datastack_drop_tooltip);
+  WM_dropbox_add(lb,
+                 "OUTLINER_OT_object_reorder_drop",
+                 object_reorder_drop_poll,
+                 nullptr,
+                 nullptr,
+                 object_reorder_drop_tooltip);
   WM_dropbox_add(lb,
                  "OUTLINER_OT_collection_drop",
                  collection_drop_poll,

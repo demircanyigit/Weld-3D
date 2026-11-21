@@ -8,6 +8,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_axis_angle.hh"
 #include "BLI_math_rotation.hh"
+#include "BLI_array.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -24,10 +25,34 @@ namespace blender::geometry {
 
 Mesh *radial_array(const Mesh &mesh, const RadialArrayParams &params)
 {
-  if (mesh.verts_num == 0) {
+  return radial_array(mesh, {}, {}, params);
+}
+
+Mesh *radial_array(const Mesh &mesh,
+                   const Span<const Mesh *> meshes,
+                   const Span<int> picks,
+                   const RadialArrayParams &params)
+{
+  const int count = std::max(params.count, 1);
+  const bool use_picks = !meshes.is_empty() && picks.size() == count;
+  /* The mesh of each copy, null where it has nothing. */
+  auto copy_mesh = [&](const int i) -> const Mesh * {
+    if (!use_picks || picks[i] < 0) {
+      return &mesh;
+    }
+    return meshes[picks[i]];
+  };
+  bool any_geometry = false;
+  for (const int i : IndexRange(count)) {
+    const Mesh *copy = copy_mesh(i);
+    if (copy != nullptr && copy->verts_num > 0) {
+      any_geometry = true;
+      break;
+    }
+  }
+  if (!any_geometry) {
     return nullptr;
   }
-  const int count = std::max(params.count, 1);
   const int axis = std::clamp(params.axis, 0, 2);
   float3 axis_dir(0.0f);
   axis_dir[axis] = 1.0f;
@@ -40,8 +65,15 @@ Mesh *radial_array(const Mesh &mesh, const RadialArrayParams &params)
                                                        params.angle / (count - 1);
 
   std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>(count);
-  const int handle = instances->add_reference(
-      bke::InstanceReference{bke::GeometrySet::from_mesh(BKE_mesh_copy_for_eval(mesh))});
+  /* One reference per mesh, the meshes are only read. */
+  const int own_handle = instances->add_reference(bke::InstanceReference{
+      bke::GeometrySet::from_mesh(const_cast<Mesh *>(&mesh), bke::GeometryOwnershipType::ReadOnly)});
+  Array<int> mesh_handles(meshes.size());
+  for (const int i : meshes.index_range()) {
+    mesh_handles[i] = instances->add_reference(
+        bke::InstanceReference{bke::GeometrySet::from_mesh(
+            const_cast<Mesh *>(meshes[i]), bke::GeometryOwnershipType::ReadOnly)});
+  }
   MutableSpan<int> handles = instances->reference_handles_for_write();
   MutableSpan<float4x4> transforms = instances->transforms_for_write();
 
@@ -60,7 +92,7 @@ Mesh *radial_array(const Mesh &mesh, const RadialArrayParams &params)
       transform = math::from_location<float4x4>(
           params.center + math::transform_point(rotation, offset - params.center));
     }
-    handles[i] = handle;
+    handles[i] = (use_picks && picks[i] >= 0) ? mesh_handles[picks[i]] : own_handle;
     transforms[i] = transform;
   }
 

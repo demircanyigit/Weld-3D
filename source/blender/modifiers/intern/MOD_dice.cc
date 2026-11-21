@@ -19,6 +19,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_mesh.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
 #include "DEG_depsgraph_build.hh"
@@ -64,6 +65,11 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   }
 
   const bool use_interior_material = dmd.flag & MOD_DICE_INTERIOR_MATERIAL;
+  const int interior_material = use_interior_material ?
+                                    MOD_material_slot(*mesh,
+                                                      dmd.interior_material_pick,
+                                                      dmd.interior_material) :
+                                    0;
   geometry::MeshDiceParams params;
   params.mode = dmd.mode == MOD_DICE_MODE_SIZE ? geometry::MeshDiceMode::Size :
                                                  geometry::MeshDiceMode::Count;
@@ -79,6 +85,9 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   }
 
   Mesh *result = geometry::mesh_dice(*mesh, params);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (result == nullptr) {
     BKE_modifier_set_error(ctx->object, md, "Too many cells, the limit is one million");
     return mesh;
@@ -94,7 +103,7 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
       if (material_index) {
         for (const int face : interior.index_range()) {
           if (interior[face]) {
-            material_index.span[face] = dmd.interior_material;
+            material_index.span[face] = interior_material;
           }
         }
         material_index.finish();
@@ -129,7 +138,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   row.prop(ptr, "use_interior_material", UI_ITEM_NONE, "", ICON_NONE);
   ui::Layout &sub = row.row(true);
   sub.active_set(RNA_boolean_get(ptr, "use_interior_material"));
-  sub.prop(ptr, "interior_material", UI_ITEM_NONE, "", ICON_NONE);
+  modifier_material_ui(sub, ptr, "interior_material_pick", "interior_material", "");
 
   modifier_error_message_draw(layout, ptr);
 }
@@ -143,12 +152,21 @@ static void panel_register(ARegionType *region_type)
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   const DiceModifierData &dmd = *reinterpret_cast<DiceModifierData *>(md);
+  if (dmd.flag & MOD_DICE_INTERIOR_MATERIAL) {
+    MOD_material_slot(*mesh, dmd.interior_material_pick, 0);
+  }
   return MOD_cached_modify_mesh(
       md, ctx, mesh, modify_mesh_compute, [&](geometry::SimCacheHasher &hasher) {
         if (dmd.flag & MOD_DICE_WORLD_SPACE) {
           hasher.add(ctx->object->object_to_world());
         }
       });
+}
+
+static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
+{
+  DiceModifierData *pick_data = reinterpret_cast<DiceModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->interior_material_pick), IDWALK_CB_USER);
 }
 
 ModifierTypeInfo modifierType_Dice = {
@@ -177,7 +195,7 @@ ModifierTypeInfo modifierType_Dice = {
     /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ nullptr,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,

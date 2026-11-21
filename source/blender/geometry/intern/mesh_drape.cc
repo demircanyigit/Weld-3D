@@ -458,6 +458,7 @@ Mesh *mesh_drape(const Mesh &mesh, const MeshDrapeParams &params, const char **r
   hasher.add_span(params.pin);
   return sim_cache_get(
       hasher.finish(),
+      mesh,
       [&](const char **r_compute_error) { return mesh_drape_compute(mesh, params, r_compute_error); },
       r_error);
 }

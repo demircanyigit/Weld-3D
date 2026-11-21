@@ -564,4 +564,64 @@ void VIEW3D_OT_view_selected(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Frame Objects (Weld 3D)
+ *
+ * Frame a given list of objects in a given 3D view, without touching the selection.
+ * Used by the "Frame Target" button in modifier and constraint object fields.
+ * \{ */
+
+bool ED_view3d_frame_objects(bContext *C,
+                             ScrArea *area,
+                             ARegion *region,
+                             Span<Object *> objects,
+                             const int smooth_viewtx)
+{
+  if (area == nullptr || region == nullptr || area->spacetype != SPACE_VIEW3D ||
+      region->regiontype != RGN_TYPE_WINDOW || region->regiondata == nullptr)
+  {
+    return false;
+  }
+
+  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  const RegionView3D *rv3d = static_cast<const RegionView3D *>(region->regiondata);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+
+  float3 min(FLT_MAX), max(-FLT_MAX);
+  bool found = false;
+  for (Object *ob : objects) {
+    if (ob == nullptr) {
+      continue;
+    }
+    Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
+    if (ob_eval == nullptr) {
+      continue;
+    }
+    bool only_center = false;
+    if (view3d_object_skip_minmax(v3d, rv3d, DEG_get_original(ob_eval), false, &only_center)) {
+      continue;
+    }
+    view3d_object_calc_minmax(depsgraph, ob_eval, only_center, min, max);
+    found = true;
+  }
+  if (!found) {
+    return false;
+  }
+
+  /* Smooth view reads the area and region from the context, so point it at the 3D view. */
+  ScrArea *area_prev = CTX_wm_area(C);
+  ARegion *region_prev = CTX_wm_region(C);
+  CTX_wm_area_set(C, area);
+  CTX_wm_region_set(C, region);
+
+  view3d_from_minmax(C, v3d, region, min, max, true, smooth_viewtx);
+  ED_region_tag_redraw(region);
+
+  CTX_wm_area_set(C, area_prev);
+  CTX_wm_region_set(C, region_prev);
+  return true;
+}
+
+/** \} */
+
 }  // namespace blender

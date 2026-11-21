@@ -413,9 +413,19 @@ bool ED_node_is_geometry(const SpaceNode *snode)
   return snode->tree_idname == ntreeType_Geometry->idname;
 }
 
+bool ED_node_is_texture_graph(const SpaceNode *snode)
+{
+  return snode->tree_idname == ntreeType_TextureGraph->idname;
+}
+
+bool ED_node_is_tree_graph(const SpaceNode *snode)
+{
+  return snode->tree_idname == ntreeType_TreeGraph->idname;
+}
+
 bool ED_node_supports_preview(SpaceNode *snode)
 {
-  return ED_node_is_compositor(snode) ||
+  return ED_node_is_compositor(snode) || ED_node_is_texture_graph(snode) ||
          (USER_EXPERIMENTAL_TEST(&U, use_shader_node_previews) && ED_node_is_shader(snode));
 }
 
@@ -589,7 +599,7 @@ void ED_node_set_active(
 
     WM_main_add_notifier(NC_MATERIAL | ND_NODES, node->id);
   }
-  else if (ntree->type == NTREE_COMPOSIT) {
+  else if (ELEM(ntree->type, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
     /* Make active viewer, currently only one is supported. */
     if (node->type_legacy == CMP_NODE_VIEWER) {
       for (bNode *node_iter : ntree->all_nodes()) {
@@ -981,11 +991,20 @@ bool node_is_previewable(const SpaceNode &snode, const bNodeTree &ntree, const b
   return node.typeinfo->flag & NODE_PREVIEW;
 }
 
+int node_socket_multi_input_rows(const bNodeSocket &socket)
+{
+  const int total = socket.runtime->total_inputs;
+  if (socket.owner_tree().type == NTREE_TREE_GRAPH) {
+    return std::max(total, 3);
+  }
+  return total;
+}
+
 float node_socket_calculate_height(const bNodeSocket &socket)
 {
   float sock_height = NODE_SOCKSIZE;
   if (socket.flag & SOCK_MULTI_INPUT) {
-    sock_height += max_ii(NODE_MULTI_INPUT_LINK_GAP * 0.5f * socket.runtime->total_inputs,
+    sock_height += max_ff(NODE_MULTI_INPUT_LINK_GAP * 0.5f * node_socket_multi_input_rows(socket),
                           NODE_SOCKSIZE);
   }
   return sock_height;
@@ -1009,10 +1028,12 @@ static bool cursor_isect_multi_input_socket(const float2 &cursor, const bNodeSoc
    * But keep it smaller because for multi-input socket you
    * sometimes want to drag the link to the other side, if you may
    * accidentally pick the wrong link otherwise. */
+  /* Tree Graph inputs take drops as far into the node as regular sockets do. */
+  const float reach = socket.owner_tree().type == NTREE_TREE_GRAPH ? 5.5f : 2.0f;
   rctf multi_socket_rect;
   BLI_rctf_init(&multi_socket_rect,
                 location.x - NODE_SOCKSIZE * 4.0f,
-                location.x + NODE_SOCKSIZE * 2.0f,
+                location.x + NODE_SOCKSIZE * reach,
                 location.y - node_socket_height,
                 location.y + node_socket_height);
   if (BLI_rctf_isect_pt(&multi_socket_rect, cursor.x, cursor.y)) {

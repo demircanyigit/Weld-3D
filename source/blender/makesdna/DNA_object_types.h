@@ -150,7 +150,8 @@ enum {
   OB_DUPLIFACES = 1 << 9,
   OB_DUPLIFACES_SCALE = 1 << 10,
   OB_DUPLIPARTS = 1 << 11,
-  OB_TRANSFLAG_UNUSED_12 = 1 << 12, /* cleared */
+  /** Weld 3D: this empty is a group (made by Group, removed by Ungroup). */
+  OB_TRANSFLAG_GROUP = 1 << 12,
   /* runtime constraints disable */
   OB_NO_CONSTRAINTS = 1 << 13,
   /* when calculating vertex parent position, ignore CD_ORIGINDEX layer */
@@ -599,7 +600,8 @@ struct Object {
   /** Flag for pinning. */
   char shapeflag = 0;
 
-  char _pad3[1] = {};
+  /** Weld 3D: outliner color tag, 0 = none, otherwise `COLLECTION_COLOR_01 + 1` and up. */
+  char outliner_color = 0;
 
   /** Object constraints. */
   ListBaseT<bConstraint> constraints = {nullptr, nullptr};

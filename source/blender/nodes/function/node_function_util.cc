@@ -13,10 +13,26 @@
 
 namespace blender {
 
-static bool fn_node_poll_default(const bke::bNodeType * /*ntype*/,
+/** The value nodes the Tree modifier can work out for every branch. */
+static bool is_tree_graph_value_node(const bke::bNodeType *ntype, const bNodeTree *ntree)
+{
+  return STREQ(ntree->idname, "TreeGraphNodeTree") && STR_ELEM(ntype->idname.c_str(),
+                                                              "FunctionNodeRandomValue",
+                                                              "FunctionNodeInputInt",
+                                                              "FunctionNodeInputBool",
+                                                              "FunctionNodeInputVector",
+                                                              "FunctionNodeCompare",
+                                                              "FunctionNodeBooleanMath",
+                                                              "FunctionNodeFloatToInt");
+}
+
+static bool fn_node_poll_default(const bke::bNodeType *ntype,
                                  const bNodeTree *ntree,
                                  const char **r_disabled_hint)
 {
+  if (is_tree_graph_value_node(ntype, ntree)) {
+    return true;
+  }
   /* Function nodes are only supported in simulation node trees so far. */
   if (!STREQ(ntree->idname, "GeometryNodeTree")) {
     *r_disabled_hint = RPT_("Not a geometry node tree");
@@ -35,11 +51,14 @@ void fn_node_type_base(bke::bNodeType *ntype,
   ntype->gather_link_search_ops = nodes::search_link_ops_for_basic_node;
 }
 
-static bool fn_cmp_node_poll_default(const bke::bNodeType * /*ntype*/,
+static bool fn_cmp_node_poll_default(const bke::bNodeType *ntype,
                                      const bNodeTree *ntree,
                                      const char **r_disabled_hint)
 {
-  if (!STR_ELEM(ntree->idname, "GeometryNodeTree", "CompositorNodeTree")) {
+  if (is_tree_graph_value_node(ntype, ntree)) {
+    return true;
+  }
+  if (!STR_ELEM(ntree->idname, "GeometryNodeTree", "CompositorNodeTree", "TextureGraphNodeTree")) {
     *r_disabled_hint = RPT_("Not a geometry or compositor node tree");
     return false;
   }

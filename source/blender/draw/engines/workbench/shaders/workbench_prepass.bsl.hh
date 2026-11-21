@@ -100,6 +100,8 @@ void hair_random_material(float rand, float3 &color, float &roughness, float &me
 
 struct VertOut {
   [[smooth]] float3 normal;
+  /* View-space position, to tell which way the shading normal points from the viewer. */
+  [[smooth]] float3 view_pos;
   [[smooth]] float3 color;
   [[smooth]] float2 uv;
   [[smooth]] float alpha;
@@ -142,6 +144,7 @@ struct Mesh {
   v_out.uv = v_in.au;
 
   v_out.normal = normalize(drw_normal_object_to_view(v_in.nor));
+  v_out.view_pos = drw_point_world_to_view(world_pos);
 
   v_out.object_id = int(drw_resource_id() & 0xFFFFu) + 1;
 
@@ -206,6 +209,7 @@ struct Curves {
   v_out.uv = curves::get_customdata_vec2(ws_pt.curve_id, curves.au);
 
   v_out.normal = normalize(drw_normal_world_to_view(nor));
+  v_out.view_pos = drw_point_world_to_view(world_pos);
 
   materials.material_data_get(int(drw_custom_id()),
                               float4(curves::get_customdata_vec3(ws_pt.curve_id, curves.ac), 1.0f),
@@ -251,6 +255,7 @@ struct PointCloud {
       ws_pt, drw_world_incident_vector(ws_pt.P), drw_view_up());
 
   v_out.normal = normalize(drw_normal_world_to_view(pt.N));
+  v_out.view_pos = drw_point_world_to_view(pt.P);
 
   out_position = drw_point_world_to_homogenous(pt.P);
 
@@ -299,7 +304,11 @@ struct OpaqueOut {
                               [[out]] OpaqueOut &frag_out)
 {
   frag_out.object_id = uint(v_out.object_id);
-  frag_out.normal = normal_encode(gl_FrontFacing, v_out.normal);
+  /* A back face only turns its normal around when that normal points away from the viewer.
+   * Plain faces shade as before, but bent normals (leaf cards) shade the same from both sides. */
+  const bool keep_normal = gl_FrontFacing ||
+                           dot(v_out.normal, drw_view_incident_vector(v_out.view_pos)) > 0.0f;
+  frag_out.normal = normal_encode(keep_normal, v_out.normal);
 
   float3 base_color = v_out.color;
   if (v_out.color_ramp_row >= 0) {
@@ -316,7 +325,7 @@ struct OpaqueOut {
 
   if (srt.lighting_mode == WORKBENCH_LIGHTING_MATCAP) [[static_branch]] {
     /* For matcaps, save front facing in alpha channel. */
-    frag_out.material.a = float(gl_FrontFacing);
+    frag_out.material.a = float(keep_normal);
   }
 }
 

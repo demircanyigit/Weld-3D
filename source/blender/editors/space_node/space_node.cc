@@ -604,6 +604,20 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   region->regiontype = RGN_TYPE_UI;
   region->alignment = RGN_ALIGN_RIGHT;
 
+  /* Library: lists the nodes to add, left of the toolbar. */
+  region = BKE_area_region_new();
+
+  BLI_addtail(&snode->regionbase, region);
+  region->regiontype = RGN_TYPE_CHANNELS;
+  region->alignment = RGN_ALIGN_LEFT;
+
+  /* Nodes of the Library, beside its categories so both scroll on their own. */
+  region = BKE_area_region_new();
+
+  BLI_addtail(&snode->regionbase, region);
+  region->regiontype = RGN_TYPE_NAV_BAR;
+  region->alignment = RGN_ALIGN_LEFT | RGN_ALIGN_HIDE_WITH_PREV;
+
   /* toolbar */
   region = BKE_area_region_new();
 
@@ -683,6 +697,9 @@ static void node_area_tag_tree_recalc(SpaceNode *snode, ScrArea *area)
 {
   if (ED_node_is_compositor(snode)) {
     snode->runtime->recalc_regular_compositing = true;
+  }
+  else if (ED_node_is_texture_graph(snode)) {
+    snode->runtime->recalc_texture_graph = true;
   }
 
   ED_area_tag_refresh(area);
@@ -798,10 +815,12 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
 
     case NC_IMAGE:
       if (wmn->action == NA_EDITED) {
-        if (ED_node_is_compositor(snode)) {
+        if (ED_node_is_compositor(snode) || ED_node_is_texture_graph(snode)) {
           /* Without this check drawing on an image could become very slow when the compositor is
            * open. */
           if (any_node_uses_id(snode->nodetree, static_cast<ID *>(wmn->reference))) {
+            snode->runtime->texture_graph_signature = 0;
+            ED_texture_graph_clear_cache();
             node_area_tag_tree_recalc(snode, area);
           }
         }
@@ -850,6 +869,20 @@ static void node_area_refresh(const bContext *C, ScrArea *area)
       ED_node_compositor_job(C);
     }
   }
+
+  if (snode->nodetree && snode->nodetree->type == NTREE_TEXTURE_GRAPH) {
+    if (snode->runtime->recalc_texture_graph) {
+      snode->runtime->recalc_texture_graph = false;
+      if ((snode->nodetree->texture_graph_flag & NTREE_TEXTURE_GRAPH_NO_AUTO_UPDATE) == 0) {
+        /* Moving, selecting or adding frames changes nothing in the images: skip those. */
+        const uint64_t signature = ED_texture_graph_signature(snode->nodetree);
+        if (signature != snode->runtime->texture_graph_signature) {
+          snode->runtime->texture_graph_signature = signature;
+          ED_texture_graph_job(C, snode->nodetree);
+        }
+      }
+    }
+  }
 }
 
 static SpaceLink *node_duplicate(SpaceLink *sl)
@@ -881,6 +914,21 @@ static void node_buttons_region_init(wmWindowManager *wm, ARegion *region)
 }
 
 static void node_buttons_region_draw(const bContext *C, ARegion *region)
+{
+  ED_region_panels(C, region);
+}
+
+/* add handlers, stuff you only do once or on area/region changes */
+static void node_library_region_init(wmWindowManager *wm, ARegion *region)
+{
+  ED_region_panels_init(wm, region);
+
+  wmKeyMap *keymap = WM_keymap_ensure(
+      wm->runtime->defaultconf, "Node Generic", SPACE_NODE, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
+}
+
+static void node_library_region_draw(const bContext *C, ARegion *region)
 {
   ED_region_panels(C, region);
 }
@@ -1015,6 +1063,22 @@ static bool node_mask_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * 
 static bool node_material_drop_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_MA) && !ui::button_active_drop_name(C);
+}
+
+/* Tiles of the Library carry "node_type:" and the node's identifier. */
+static constexpr StringRef library_drag_prefix = "node_type:";
+
+static bool node_library_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
+{
+  return drag->type == WM_DRAG_STRING &&
+         StringRef(WM_drag_get_string(drag)).startswith(library_drag_prefix);
+}
+
+static void node_library_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
+{
+  const std::string type = StringRef(WM_drag_get_string(drag))
+                               .drop_prefix(library_drag_prefix.size());
+  RNA_string_set(drop->ptr, "type", type.c_str());
 }
 
 static bool node_color_drop_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
@@ -1273,6 +1337,12 @@ static void node_dropboxes()
                  node_mask_drop_poll,
                  node_id_drop_copy,
                  WM_drag_free_imported_drag_ID,
+                 nullptr);
+  WM_dropbox_add(lb,
+                 "NODE_OT_add_library_node",
+                 node_library_drop_poll,
+                 node_library_drop_copy,
+                 nullptr,
                  nullptr);
   WM_dropbox_add(lb,
                  "NODE_OT_add_material",
@@ -1877,6 +1947,28 @@ void ED_spacetype_node()
   BLI_addhead(&st->regiontypes, art);
 
   node_tree_interface_panel_register(art);
+
+  /* regions: library */
+  art = MEM_new_zeroed<ARegionType>("spacetype node library region");
+  art->regionid = RGN_TYPE_CHANNELS;
+  art->prefsizex = 175;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
+  art->listener = node_region_listener;
+  art->init = node_library_region_init;
+  art->snap_size = ED_region_generic_panel_region_snap_size;
+  art->draw = node_library_region_draw;
+  BLI_addhead(&st->regiontypes, art);
+
+  /* regions: library nodes */
+  art = MEM_new_zeroed<ARegionType>("spacetype node library nodes region");
+  art->regionid = RGN_TYPE_NAV_BAR;
+  art->prefsizex = 250;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
+  art->listener = node_region_listener;
+  art->init = node_library_region_init;
+  art->snap_size = ED_region_generic_panel_region_snap_size;
+  art->draw = node_library_region_draw;
+  BLI_addhead(&st->regiontypes, art);
 
   /* regions: toolbar */
   art = MEM_new_zeroed<ARegionType>("spacetype view3d tools region");

@@ -13,6 +13,7 @@
 #include "DNA_listBase.h"
 
 #include "BLI_function_ref.hh"
+#include "BLI_map.hh"
 
 #include "RNA_types.hh"
 
@@ -26,6 +27,7 @@ namespace blender {
 struct ARegion;
 struct Collection;
 struct EditBone;
+struct Depsgraph;
 struct ID;
 struct LayerCollection;
 struct Main;
@@ -61,6 +63,19 @@ struct SpaceOutliner_Runtime {
 
   /* Hash table for tree-store elements, using `(id, type, index)` as key. */
   std::unique_ptr<treehash::TreeHash> tree_hash;
+
+  /** Weld 3D: `session_uid` of the active object Auto Focus last saw (0 = none). */
+  uint32_t follow_active_uid = 0;
+  /** Weld 3D: false until the first draw, so opening a file or an outliner does not scroll. */
+  bool follow_active_init = false;
+
+  /** Weld 3D: Roomy row thumbnails, per object `session_uid`: the geometry update the last
+   * thumbnail was made for and when it was asked for. */
+  struct ThumbnailState {
+    uint64_t geometry_update = 0;
+    double time = 0.0;
+  };
+  Map<uint32_t, ThumbnailState> thumbnails;
 
   SpaceOutliner_Runtime() = default;
   /** Used for copying runtime data to a duplicated space. */
@@ -198,6 +213,19 @@ enum eOLSetState {
 /* size constants */
 #define OL_Y_OFFSET 2
 
+/**
+ * Weld 3D: rows can be Compact, Normal or Roomy (#SpaceOutliner.row_size). #OL_ROWH is the row
+ * height of the outliner being drawn or handled. It is set from the space with
+ * #outliner_row_height_set when drawing, setting coordinates and finding items, so code that has
+ * no access to the space (hit tests on #TreeElement.ys) uses the same height.
+ * #OL_ROW_PAD moves row content (icons, text, buttons) down to the middle of a taller row.
+ */
+int outliner_row_height_calc(const SpaceOutliner *space_outliner);
+void outliner_row_height_set(const SpaceOutliner *space_outliner);
+int outliner_row_height_get();
+#define OL_ROWH (::blender::ed::outliner::outliner_row_height_get())
+#define OL_ROW_PAD ((OL_ROWH - int(UI_UNIT_Y)) / 2)
+
 #define OL_TOG_USER_BUTS_USERS (UI_UNIT_X * 1.2f + V2D_SCROLL_WIDTH)
 
 #define OL_RNA_COLX (UI_UNIT_X * 15)
@@ -254,6 +282,9 @@ struct TreeViewContext {
    * The pose object may not be the active object (when in weight paint mode).
    * Checking this in draw loops isn't efficient, so set only once. */
   Object *ob_pose;
+
+  /** Weld 3D: evaluated data for the face/triangle count column (may be null). */
+  Depsgraph *depsgraph;
 };
 
 enum TreeItemSelectAction {
@@ -475,6 +506,7 @@ void OUTLINER_OT_scene_drop(wmOperatorType *ot);
 void OUTLINER_OT_material_drop(wmOperatorType *ot);
 void OUTLINER_OT_datastack_drop(wmOperatorType *ot);
 void OUTLINER_OT_collection_drop(wmOperatorType *ot);
+void OUTLINER_OT_object_reorder_drop(wmOperatorType *ot);
 
 /* ...................................................... */
 
@@ -586,6 +618,7 @@ void OUTLINER_OT_hide(wmOperatorType *ot);
 void OUTLINER_OT_unhide_all(wmOperatorType *ot);
 
 void OUTLINER_OT_collection_color_tag_set(wmOperatorType *ot);
+void OUTLINER_OT_object_color_tag_set(wmOperatorType *ot);
 
 /* `outliner_utils.cc` */
 

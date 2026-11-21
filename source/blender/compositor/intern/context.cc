@@ -63,10 +63,27 @@ Profiler *Context::profiler() const
 
 void Context::evaluate_operation_post() const {}
 
+float Context::draft_scale() const
+{
+  return 1.0f;
+}
+
 bool Context::is_canceled() const
 {
   return false;
 }
+
+bool Context::wrap_edges() const
+{
+  return false;
+}
+
+bool Context::load_node_results(const bNode & /*node*/, NodeOperation & /*operation*/)
+{
+  return false;
+}
+
+void Context::store_node_results(const bNode & /*node*/, NodeOperation & /*operation*/) {}
 
 float Context::get_render_percentage() const
 {

@@ -8,6 +8,13 @@
 
 #pragma once
 
+#include <string>
+
+#include "BLI_map.hh"
+#include "BLI_timeit.hh"
+
+#include "DNA_node_types.h"
+
 namespace blender {
 
 struct ARegion;
@@ -70,6 +77,8 @@ bool ED_node_is_compositor(const SpaceNode *snode);
 bool ED_node_is_shader(SpaceNode *snode);
 bool ED_node_is_texture(SpaceNode *snode);
 bool ED_node_is_geometry(const SpaceNode *snode);
+bool ED_node_is_texture_graph(const SpaceNode *snode);
+bool ED_node_is_tree_graph(const SpaceNode *snode);
 bool ED_node_supports_preview(SpaceNode *snode);
 
 /**
@@ -85,6 +94,30 @@ void ED_node_set_active(
  * Launch a compositor job for the scene of the given context.
  */
 void ED_node_compositor_job(const bContext *C);
+
+/* `node_texture_graph.cc` */
+
+/**
+ * Compute a Texture Graph on the CPU and write each output of the graph into its image
+ * data-block, creating the images when needed. With \a with_previews, the node thumbnails are
+ * refreshed too.
+ */
+void ED_texture_graph_evaluate(Main *bmain, Scene *scene, bNodeTree *ntree, bool with_previews);
+/**
+ * Compute a Texture Graph in the background and write its images when done. A new call while
+ * one runs stops it and starts again with the graph as it is then.
+ */
+void ED_texture_graph_job(const bContext *C, bNodeTree *ntree);
+/** How long each node of a Texture Graph took the last time it ran, null when it has not run. */
+const Map<bNodeInstanceKey, timeit::Nanoseconds> *ED_texture_graph_node_times(
+    const bNodeTree *ntree);
+/** A hash of everything that changes what a Texture Graph makes, but not where its nodes are. */
+uint64_t ED_texture_graph_signature(const bNodeTree *ntree);
+/** Forget the node results kept between runs of the Texture Graphs. */
+void ED_texture_graph_clear_cache();
+
+/** The image a Texture Graph writes for the output with the given name. */
+std::string ED_texture_graph_image_name(const bNodeTree *ntree, const char *output_name);
 
 /* `node_ops.cc` */
 

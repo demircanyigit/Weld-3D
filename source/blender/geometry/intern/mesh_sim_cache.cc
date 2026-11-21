@@ -6,6 +6,7 @@
  * \ingroup geo
  */
 
+#include <algorithm>
 #include <memory>
 
 #include <xxhash.h>
@@ -139,7 +140,29 @@ class SimCachedValue : public memory_cache::CachedValue {
 
 }  // namespace
 
+void sim_cache_mesh_prepare(Mesh &mesh)
+{
+  mesh.runtime->edit_mesh.reset();
+  /* The materials are evaluated copies, which are freed when the depsgraph is built again. A
+   * cached mesh that kept them would hand freed materials to later results. */
+  for (const int i : IndexRange(mesh.totcol)) {
+    mesh.mat[i] = nullptr;
+  }
+}
+
+Mesh *sim_cache_mesh_copy(const Mesh &cached, const Mesh &materials_from)
+{
+  /* The copy shares its arrays with the cached mesh, so it is cheap. */
+  Mesh *result = BKE_mesh_copy_for_eval(cached);
+  const int shared_num = std::min<int>(result->totcol, materials_from.totcol);
+  for (const int i : IndexRange(shared_num)) {
+    result->mat[i] = materials_from.mat[i];
+  }
+  return result;
+}
+
 Mesh *sim_cache_get(const SimCacheKey &key,
+                    const Mesh &materials_from,
                     const FunctionRef<Mesh *(const char **r_error)> compute,
                     const char **r_error)
 {
@@ -148,14 +171,16 @@ Mesh *sim_cache_get(const SimCacheKey &key,
       SimGenericKey(key), [&]() {
         auto value = std::make_unique<SimCachedValue>();
         value->mesh = compute(&value->error);
+        if (value->mesh != nullptr) {
+          sim_cache_mesh_prepare(*value->mesh);
+        }
         return value;
       });
   if (!value || value->mesh == nullptr) {
     *r_error = value ? value->error : nullptr;
     return nullptr;
   }
-  /* The copy shares its arrays with the cached mesh, so it is cheap. */
-  return BKE_mesh_copy_for_eval(*value->mesh);
+  return sim_cache_mesh_copy(*value->mesh, materials_from);
 }
 
 std::shared_ptr<const memory_cache::CachedValue> sim_cache_get_value(

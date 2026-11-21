@@ -22,6 +22,7 @@
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
 #include "BKE_object.hh"
+#include "BKE_scene.hh"
 
 #include "ED_outliner.hh"
 #include "ED_screen.hh"
@@ -55,6 +56,7 @@ void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc)
   /* Objects. */
   BKE_view_layer_synced_ensure(tvc->scene, tvc->view_layer);
   tvc->obact = BKE_view_layer_active_object_get(tvc->view_layer);
+  tvc->depsgraph = BKE_scene_get_depsgraph(tvc->scene, tvc->view_layer);
   if (tvc->obact != nullptr) {
     tvc->ob_edit = OBEDIT_FROM_OBACT(tvc->obact);
 
@@ -69,12 +71,43 @@ void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc)
 
 /** \} */
 
+static int g_outliner_row_height = 0;
+
+int outliner_row_height_calc(const SpaceOutliner *space_outliner)
+{
+  const float unit = UI_UNIT_Y;
+  if (space_outliner && ELEM(space_outliner->outlinevis, SO_VIEW_LAYER, SO_SCENES)) {
+    switch (space_outliner->row_size) {
+      case SO_ROW_COMPACT:
+        return int(unit * 0.8f + 0.5f);
+      case SO_ROW_ROOMY:
+        return int(unit * 2.0f + 0.5f);
+      default:
+        break;
+    }
+  }
+  return int(unit);
+}
+
+void outliner_row_height_set(const SpaceOutliner *space_outliner)
+{
+  g_outliner_row_height = outliner_row_height_calc(space_outliner);
+}
+
+int outliner_row_height_get()
+{
+  return g_outliner_row_height > 0 ? g_outliner_row_height : int(UI_UNIT_Y);
+}
+
 TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
                                      const ListBaseT<TreeElement> *tree,
                                      float view_co_y)
 {
+  if (tree == &space_outliner->tree) {
+    outliner_row_height_set(space_outliner);
+  }
   for (TreeElement &te_iter : *tree) {
-    if (view_co_y < (te_iter.ys + UI_UNIT_Y)) {
+    if (view_co_y < (te_iter.ys + OL_ROWH)) {
       if (view_co_y >= te_iter.ys) {
         /* co_y is inside this element */
         return &te_iter;
@@ -90,7 +123,7 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
       /* If the coordinate is lower than the next element, we can continue with that one and skip
        * recursion too. */
       const TreeElement *te_next = te_iter.next;
-      if (te_next && (view_co_y < (te_next->ys + UI_UNIT_Y))) {
+      if (te_next && (view_co_y < (te_next->ys + OL_ROWH))) {
         continue;
       }
 
@@ -413,7 +446,7 @@ bool outliner_is_element_visible(const TreeElement *te)
 
 bool outliner_is_element_in_view(const TreeElement *te, const View2D *v2d)
 {
-  return ((te->ys + UI_UNIT_Y) >= v2d->cur.ymin) && (te->ys <= v2d->cur.ymax);
+  return ((te->ys + OL_ROWH) >= v2d->cur.ymin) && (te->ys <= v2d->cur.ymax);
 }
 
 bool outliner_item_is_co_over_name_icons(const TreeElement *te, float view_co_x)
@@ -452,7 +485,7 @@ void outliner_scroll_view(SpaceOutliner *space_outliner, ARegion *region, int de
 
   /* Adjust view if delta placed view outside total area */
   int offset;
-  if (region->v2d.cur.ymax > -UI_UNIT_Y) {
+  if (region->v2d.cur.ymax > -OL_ROWH) {
     offset = region->v2d.cur.ymax;
     region->v2d.cur.ymax -= offset;
     region->v2d.cur.ymin -= offset;

@@ -68,6 +68,7 @@ set(SRC
   intern/MOD_lattice.cc
   intern/MOD_lineart.cc
   intern/MOD_mask.cc
+  intern/MOD_masks.cc
   intern/MOD_mesh_to_volume.cc
   intern/MOD_meshcache.cc
   intern/MOD_meshcache_mdd.cc
@@ -84,12 +85,27 @@ set(SRC
   intern/MOD_particleinstance.cc
   intern/MOD_particlesystem.cc
   intern/MOD_remesh.cc
+  intern/MOD_resample.cc
+  intern/MOD_lean.cc
+  intern/MOD_chisel.cc
+  intern/MOD_faceset.cc
+  intern/MOD_wrap.cc
+  intern/MOD_place.cc
+  intern/MOD_scatter.cc
+  intern/MOD_dent.cc
+  intern/MOD_contact.cc
+  intern/MOD_cable.cc
+  intern/MOD_cracks.cc
+  intern/MOD_collision_hull.cc
+  intern/MOD_bricks.cc
+  intern/MOD_uv_rotate.cc
   intern/MOD_screw.cc
   intern/MOD_shapekey.cc
   intern/MOD_shrinkwrap.cc
   intern/MOD_simpledeform.cc
   intern/MOD_skin.cc
   intern/MOD_smooth.cc
+  intern/MOD_snow.cc
   intern/MOD_softbody.cc
   intern/MOD_solidify.cc
   intern/MOD_solidify_extrude.cc
@@ -100,6 +116,7 @@ set(SRC
   intern/MOD_triangulate.cc
   intern/MOD_ui_common.cc
   intern/MOD_util.cc
+  intern/MOD_place_util.cc
   intern/MOD_uvproject.cc
   intern/MOD_uvwarp.cc
   intern/MOD_uv_scale.cc
@@ -156,6 +173,15 @@ set(SRC
   intern/MOD_shatter.cc
   intern/MOD_edge_damage.cc
   intern/MOD_edit_poly.cc
+  intern/MOD_patch.cc
+  intern/MOD_auto_weights.cc
+  intern/MOD_smooth_weights.cc
+  intern/MOD_transfer_weights.cc
+  intern/MOD_bone_colors.cc
+  intern/MOD_pack.cc
+  intern/MOD_rock.cc
+  intern/MOD_tree.cc
+  intern/MOD_tree_fields.cc
   intern/MOD_sweep.cc
   intern/MOD_tile.cc
   intern/MOD_trim.cc
@@ -189,12 +215,15 @@ set(SRC
 
   MOD_modifiertypes.hh
   MOD_nodes.hh
+  MOD_tree.hh
   intern/MOD_grease_pencil_util.hh
   intern/MOD_meshcache_util.hh
   intern/MOD_solidify_util.hh
   intern/MOD_colliders.hh
   intern/MOD_ui_common.hh
   intern/MOD_util.hh
+  intern/MOD_place_util.hh
+  intern/MOD_weights_util.hh
   intern/MOD_weightvg_util.hh
   intern/lineart/MOD_lineart.hh
   intern/lineart/lineart_intern.hh
@@ -211,6 +240,7 @@ set(LIB
   PUBLIC bf::dna
   PRIVATE bf::functions
   PRIVATE bf::geometry
+  PRIVATE bf::imbuf
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::extern::xxhash
   PRIVATE bf::nodes
@@ -240,6 +270,17 @@ if(WITH_USD)
   list(APPEND LIB
     bf_io_usd
   )
+endif()
+
+if(WITH_BULLET)
+  list(APPEND INC
+    ../../../intern/rigidbody
+  )
+  list(APPEND LIB
+    bf_intern_rigidbody
+    PRIVATE bf::dependencies::optional::bullet
+  )
+  add_definitions(-DWITH_BULLET)
 endif()
 
 if(WITH_MOD_REMESH)

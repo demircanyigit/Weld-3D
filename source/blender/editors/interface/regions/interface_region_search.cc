@@ -97,6 +97,12 @@ struct uiSearchboxData {
   /* Owned by ButtonSearch */
   void *search_arg;
   ButtonSearchListenFn search_listener;
+
+  /** Draw duplicate/delete icons on the right side of each row (list view only). */
+  bool use_item_actions = false;
+  /** Row and icon under the cursor, for highlighting. */
+  int action_hover_item = -1;
+  SearchItemAction action_hover = SEARCH_ITEM_ACTION_NONE;
 };
 
 #define SEARCH_ITEMS 10
@@ -229,6 +235,27 @@ int searchbox_size_x_guess(const bContext *C, const ButtonSearchUpdateFn update_
   return searchbox_size_x_from_items(items);
 }
 
+/** Space reserved on the right side of each row for the action icons. */
+static int searchbox_item_actions_width(const float zoom)
+{
+  return int(zoom * (SEARCH_ITEM_ACTION_TOT * UI_UNIT_X + 0.25f * UI_UNIT_X));
+}
+
+/** Rectangle of one action icon inside the row rectangle `row_rect`. */
+static void searchbox_item_action_rect(rcti *r_rect,
+                                       const rcti *row_rect,
+                                       const float zoom,
+                                       const SearchItemAction action)
+{
+  const int size = int(zoom * UI_UNIT_X);
+  const int pad = int(zoom * 0.25f * UI_UNIT_X);
+  /* Duplicate on the left, delete at the far right. */
+  const int slot_from_right = SEARCH_ITEM_ACTION_TOT - 1 - int(action);
+  *r_rect = *row_rect;
+  r_rect->xmax = row_rect->xmax - pad - slot_from_right * size;
+  r_rect->xmin = r_rect->xmax - size;
+}
+
 int search_items_find_index(const SearchItems *items, const char *name)
 {
   if (items->name_prefix_offsets != nullptr) {
@@ -317,6 +344,41 @@ static void searchbox_butrect(rcti *r_rect, uiSearchboxData *data, int itemnr)
     r_rect->ymax = data->bbox.ymax - tria_h - itemnr * buth;
     r_rect->ymin = r_rect->ymax - buth;
   }
+}
+
+/**
+ * Find the action icon under `xy` (window coordinates).
+ * \param r_index: The row index, or -1 when the cursor isn't over an icon.
+ */
+static SearchItemAction searchbox_item_action_at(uiSearchboxData *data,
+                                                 const ARegion *region,
+                                                 const int xy[2],
+                                                 int *r_index)
+{
+  *r_index = -1;
+  if (!data->use_item_actions) {
+    return SEARCH_ITEM_ACTION_NONE;
+  }
+  const int mx = xy[0] - region->winrct.xmin;
+  const int my = xy[1] - region->winrct.ymin;
+  for (int a = 0; a < data->items.totitem; a++) {
+    rcti row_rect;
+    searchbox_butrect(&row_rect, data, a);
+    if (!BLI_rcti_isect_pt(&row_rect, mx, my)) {
+      continue;
+    }
+    for (int i = 0; i < SEARCH_ITEM_ACTION_TOT; i++) {
+      const SearchItemAction action = SearchItemAction(i);
+      rcti icon_rect;
+      searchbox_item_action_rect(&icon_rect, &row_rect, data->zoom, action);
+      if (BLI_rcti_isect_pt(&icon_rect, mx, my)) {
+        *r_index = a;
+        return action;
+      }
+    }
+    break;
+  }
+  return SEARCH_ITEM_ACTION_NONE;
 }
 
 int searchbox_find_index(ARegion *region, const char *name)
@@ -454,6 +516,20 @@ bool searchbox_event(
 
       bool is_inside = false;
 
+      /* Track the action icon under the cursor so it can be highlighted. */
+      bool is_over_action = false;
+      if (data->use_item_actions) {
+        int hover_item;
+        const SearchItemAction hover_action = searchbox_item_action_at(
+            data, region, event->xy, &hover_item);
+        is_over_action = hover_action != SEARCH_ITEM_ACTION_NONE;
+        if (hover_item != data->action_hover_item || hover_action != data->action_hover) {
+          data->action_hover_item = hover_item;
+          data->action_hover = hover_action;
+          ED_region_tag_redraw(region);
+        }
+      }
+
       if (BLI_rcti_isect_pt(&region->winrct, event->xy[0], event->xy[1])) {
         rcti rect;
         int a;
@@ -475,7 +551,7 @@ bool searchbox_event(
       }
 
       if (U.flag & USER_TOOLTIPS) {
-        if (is_inside) {
+        if (is_inside && !is_over_action) {
           if (data->active != -1) {
             ScrArea *area = CTX_wm_area(C);
             search_but->item_active = data->items.pointers[data->active];
@@ -495,6 +571,57 @@ bool searchbox_event(
   }
 
   return handled;
+}
+
+bool searchbox_item_action_event(bContext *C, ARegion *region, Button *but, const wmEvent *event)
+{
+  uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
+  ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
+
+  BLI_assert(but->type == ButtonType::SearchMenu);
+
+  if (!data->use_item_actions || !search_but->item_action_exec_fn) {
+    return false;
+  }
+
+  int item_index;
+  const SearchItemAction action = searchbox_item_action_at(data, region, event->xy, &item_index);
+  if (action == SEARCH_ITEM_ACTION_NONE) {
+    return false;
+  }
+  /* Run on release (like picking an item), but swallow the press so it doesn't pick the row. */
+  if (event->val != KM_RELEASE) {
+    return true;
+  }
+
+  void *item = data->items.pointers[item_index];
+  if (item == nullptr) {
+    return true;
+  }
+  if (search_but->item_action_poll_fn &&
+      !search_but->item_action_poll_fn(C, search_but->arg, item, action))
+  {
+    return true;
+  }
+
+  WM_tooltip_clear(C, CTX_wm_window(C));
+
+  if (search_but->item_action_exec_fn(C, search_but->arg, item, action)) {
+    if (action == SEARCH_ITEM_ACTION_DELETE && search_but->item_active == item) {
+      /* Don't keep a pointer to freed data. */
+      search_but->item_active = nullptr;
+    }
+    /* Refresh the list, keeping the scroll position when possible. */
+    searchbox_update(C, region, but, false);
+    while (data->items.totitem == 0 && data->items.offset > 0) {
+      data->items.offset--;
+      searchbox_update(C, region, but, false);
+    }
+    data->action_hover_item = -1;
+    data->action_hover = SEARCH_ITEM_ACTION_NONE;
+    ED_region_tag_redraw(region);
+  }
+  return true;
 }
 
 /** Wrap #ButSearchUpdateFn callback. */
@@ -667,6 +794,44 @@ static void searchbox_draw_clip_tri_up(rcti *rect, const float zoom)
   GPU_blend(GPU_BLEND_NONE);
 }
 
+/** Draw the duplicate/delete icons on the right side of one list row. */
+static void searchbox_draw_item_actions(const bContext *C,
+                                        uiSearchboxData *data,
+                                        const rcti *row_rect,
+                                        const int item_index)
+{
+  const ButtonSearch *search_but = data->search_but;
+  void *item = data->items.pointers[item_index];
+  if (item == nullptr) {
+    return;
+  }
+  const bool is_row_hover = (item_index == data->active) ||
+                            (item_index == data->action_hover_item);
+  const float aspect = U.inv_scale_factor / data->zoom;
+  const float icon_size = data->zoom * UI_ICON_SIZE;
+
+  GPU_blend(GPU_BLEND_ALPHA);
+  for (int i = 0; i < SEARCH_ITEM_ACTION_TOT; i++) {
+    const SearchItemAction action = SearchItemAction(i);
+    const bool enabled = !search_but->item_action_poll_fn ||
+                         search_but->item_action_poll_fn(C, data->search_arg, item, action);
+    const bool is_icon_hover = enabled && (item_index == data->action_hover_item) &&
+                               (action == data->action_hover);
+    float alpha = is_icon_hover ? 1.0f : (is_row_hover ? 0.7f : 0.4f);
+    if (!enabled) {
+      alpha = 0.15f;
+    }
+
+    rcti icon_rect;
+    searchbox_item_action_rect(&icon_rect, row_rect, data->zoom, action);
+    const float x = BLI_rcti_cent_x_fl(&icon_rect) - 0.5f * icon_size;
+    const float y = BLI_rcti_cent_y_fl(&icon_rect) - 0.5f * icon_size;
+    const int icon = (action == SEARCH_ITEM_ACTION_DUPLICATE) ? ICON_DUPLICATE : ICON_TRASH;
+    icon_draw_ex(x, y, icon, aspect, alpha, 0.0f, nullptr, false, UI_NO_ICON_OVERLAY_TEXT);
+  }
+  GPU_blend(GPU_BLEND_NONE);
+}
+
 static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
@@ -741,6 +906,11 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
         }
 
         searchbox_butrect(&rect, data, a);
+        /* The highlight covers the whole row, the text stops before the action icons. */
+        rcti back_rect = rect;
+        if (data->use_item_actions) {
+          rect.xmax -= searchbox_item_actions_width(data->zoom);
+        }
 
         /* widget itself */
         if ((search_sep_len == 0) ||
@@ -754,7 +924,7 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
           /* Simple menu item. */
           draw_menu_item(&data->fstyle,
                          &rect,
-                         &rect,
+                         &back_rect,
                          data->zoom,
                          data->noback,
                          name,
@@ -777,7 +947,7 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
           int name_width = 0;
           draw_menu_item(&data->fstyle,
                          &rect,
-                         &rect,
+                         &back_rect,
                          data->zoom,
                          data->noback,
                          name,
@@ -807,6 +977,10 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
                          but_flag,
                          separator_type,
                          nullptr);
+        }
+
+        if (data->use_item_actions) {
+          searchbox_draw_item_actions(C, data, &back_rect, a);
         }
       }
       /* indicate more */
@@ -1034,6 +1208,7 @@ static ARegion *searchbox_create_generic_ex(bContext *C,
     data->use_shortcut_sep = true;
   }
   data->sep_string = but->item_sep_string;
+  data->use_item_actions = (but->item_action_exec_fn != nullptr) && !data->preview;
 
   /* Adds sub-window. */
   ED_region_floating_init(region);

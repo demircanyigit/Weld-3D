@@ -38,6 +38,20 @@ static CLG_LogRef LOG = {"lib.main_namemap"};
 
 /* Assumes and ensure that the suffix number can never go beyond 1 billion. */
 constexpr int MAX_NUMBER = 999999999;
+
+/**
+ * Weld 3D: duplicates are numbered `Name_01` instead of `Name.001`. Names from older files that end
+ * in `.001` still count as numbered, so `Cube.001` and `Cube_02` share the base name `Cube`.
+ */
+static std::string id_name_split_number(const StringRef name_full, int &r_number)
+{
+  std::string name_base = BLI_string_split_name_number(name_full, '_', r_number);
+  if (name_base.size() != name_full.size()) {
+    return name_base;
+  }
+  return BLI_string_split_name_number(name_full, '.', r_number);
+}
+
 /* Value representing that there is no available number. Must be negative value. */
 constexpr int NO_AVAILABLE_NUMBER = -1;
 
@@ -230,7 +244,7 @@ struct UniqueName_Map {
 
       /* Get the name and number parts ("name.number"). */
       int number = 0;
-      const std::string name_base = BLI_string_split_name_number(BKE_id_name(*id), '.', number);
+      const std::string name_base = id_name_split_number(BKE_id_name(*id), number);
 
       /* Get and update the entry for this base name. */
       std::unique_ptr<UniqueName_Value> &val = type_map.base_name_to_num_suffix.lookup_or_add_as(
@@ -305,7 +319,7 @@ struct UniqueName_Map {
     }
 
     int number = 0;
-    const std::string name_base = BLI_string_split_name_number(name_full, '.', number);
+    const std::string name_base = id_name_split_number(name_full, number);
     std::unique_ptr<UniqueName_Value> *val = type_map.base_name_to_num_suffix.lookup_ptr(
         name_base);
     if (val == nullptr) {
@@ -447,7 +461,7 @@ static bool id_name_final_build(UniqueName_TypeMap &type_map,
    * full name. */
   if (number != NO_AVAILABLE_NUMBER) {
     BLI_assert(number >= 0 && number <= MAX_NUMBER);
-    r_name_final = fmt::format("{}.{:03}", base_name, number);
+    r_name_final = fmt::format("{}_{:02}", base_name, number);
     /* Most common case, there is a valid number suffix value and it fits in the #MAX_ID_NAME - 2
      * length limit.
      */
@@ -532,7 +546,7 @@ static bool namemap_get_name(Main &bmain,
   while (true) {
     /* Get the name and number parts ("name.number"). */
     int number = 0;
-    const std::string name_base = BLI_string_split_name_number(r_name_full, '.', number);
+    const std::string name_base = id_name_split_number(r_name_full, number);
     std::unique_ptr<UniqueName_Value> &val = type_map.base_name_to_num_suffix.lookup_or_add_as(
         name_base, std::make_unique<UniqueName_Value>(UniqueName_Value{}));
 
@@ -567,6 +581,13 @@ static bool namemap_get_name(Main &bmain,
      * the base name and put it into r_name_full, and a new iteration to find a suitable suffix
      * number and valid full name is needed. */
     if (!id_name_final_build(type_map, name_base, number_to_use, r_name_full)) {
+      continue;
+    }
+
+    /* `Cube.001` and `Cube_01` use the same number, so a number marked unused can still belong to
+     * an existing name. Mark it used and try the next one. */
+    if (type_map.full_names.contains(r_name_full)) {
+      val->mark_used(number_to_use);
       continue;
     }
 

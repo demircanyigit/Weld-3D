@@ -460,6 +460,7 @@ void Instance::begin_sync()
   cursor.begin_sync(resources, state);
   image_prepass.begin_sync(resources, state);
   motion_paths.begin_sync(resources, state);
+  group_bounds.begin_sync(resources, state);
   origins.begin_sync(resources, state);
   outline.begin_sync(resources, state);
 
@@ -658,6 +659,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
     layer.names.object_sync(manager, ob_ref, resources, state);
 
     motion_paths.object_sync(manager, ob_ref, resources, state);
+    group_bounds.object_sync(manager, ob_ref, resources, state);
     origins.object_sync(manager, ob_ref, resources, state);
 
     if (object_is_selected(ob_ref) && !in_edit_paint_mode) {
@@ -669,6 +671,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
 void Instance::end_sync()
 {
   origins.end_sync(resources, state);
+  group_bounds.end_sync(resources, state);
   resources.end_sync();
 
   auto end_sync_layer = [&](OverlayLayer &layer) {
@@ -937,6 +940,7 @@ void Instance::draw_v3d(Manager &manager, View &view)
     /* Overlay (+Line) pass. */
     draw(regular, resources.overlay_fb);
     draw_line(regular, resources.overlay_line_fb);
+    group_bounds.draw_line(resources.overlay_line_fb, manager, view);
 
     /* Here as it does depth+blending, and should draw after most overlay line passes.. */
     if (!state.is_depth_only_drawing) {

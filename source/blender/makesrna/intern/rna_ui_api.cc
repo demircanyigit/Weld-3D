@@ -685,6 +685,22 @@ static void rna_uiTemplateAnyID(Layout *layout,
   template_any_id(layout, ptr, propname, proptypename, text);
 }
 
+static void rna_uiTemplateNodeTile(Layout *layout,
+                                   const char *node_type,
+                                   const char *text,
+                                   int icon_value,
+                                   const char *tooltip,
+                                   float width,
+                                   bool as_row)
+{
+  template_node_tile(layout, node_type, text, icon_value, tooltip ? tooltip : "", width, as_row);
+}
+
+static void rna_uiTemplateNodeLibraryTree(Layout *layout, bContext *C, const char *items)
+{
+  template_node_library_tree(layout, C, items);
+}
+
 static void rna_uiTemplateAction(Layout *layout,
                                  bContext *C,
                                  ID *id,
@@ -2033,6 +2049,30 @@ void RNA_api_ui_layout(StructRNA *srna)
                 "Scale the icon size (by the button size)",
                 1.0f,
                 100.0f);
+
+  func = RNA_def_function(srna, "template_node_tile", "rna_uiTemplateNodeTile");
+  RNA_def_function_ui_description(
+      func, "A tile with a node's icon and name, adding the node when clicked");
+  parm = RNA_def_string(func, "node_type", nullptr, 0, "Node Type", "Identifier of the node");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "text", nullptr, 0, "Text", "Name shown below the icon");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_int(func, "icon_value", 0, 0, INT_MAX, "Icon", "Icon to show", 0, INT_MAX);
+  RNA_def_string(func, "tooltip", nullptr, 0, "Tooltip", "Description shown on hover");
+  RNA_def_float(func, "width", 4.0f, 2.0f, 40.0f, "Width", "Width of the tile", 2.0f, 40.0f);
+  RNA_def_boolean(func, "as_row", false, "As Row", "Show as a row with a small icon");
+
+  func = RNA_def_function(srna, "template_node_library_tree", "rna_uiTemplateNodeLibraryTree");
+  RNA_def_function_ui_description(func, "The categories of the node Library, as a tree");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_string(func,
+                        "categories",
+                        nullptr,
+                        0,
+                        "Categories",
+                        "One category per line: depth, path, name, icon and 1 when shown now, "
+                        "separated by tabs");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "template_icon_view", "template_icon_view");
   RNA_def_function_ui_description(func, "Enum. Large widget showing Icon previews.");

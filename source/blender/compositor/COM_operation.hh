@@ -143,6 +143,7 @@ class Operation {
    * - Evaluate the processor. */
   void add_and_evaluate_input_processor(StringRef identifier, SimpleOperation *processor);
 
+ protected:
   /* Release the results that are mapped to the inputs of the operation. This is called after the
    * evaluation of the operation to declare that the results are no longer needed by this
    * operation. */

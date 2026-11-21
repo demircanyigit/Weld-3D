@@ -37,6 +37,8 @@ _modules = [
     "screen_play_rendered_anim",
     "sequencer",
     "spreadsheet",
+    "texture_graph",
+    "tree_graph",
     "userpref",
     "uvcalc_follow_active",
     "uvcalc_lightmap",
@@ -63,6 +65,7 @@ def register():
     from . import (
         bone_selection_sets,
         copy_global_transform,
+        texture_graph,
     )
 
     for mod in _modules_loaded:
@@ -71,6 +74,7 @@ def register():
 
     bone_selection_sets.register()
     copy_global_transform.register()
+    texture_graph.register()
 
 
 def unregister():
@@ -78,10 +82,12 @@ def unregister():
     from . import (
         bone_selection_sets,
         copy_global_transform,
+        texture_graph,
     )
 
     bone_selection_sets.unregister()
     copy_global_transform.unregister()
+    texture_graph.unregister()
 
     for mod in reversed(_modules_loaded):
         for cls in reversed(mod.classes):

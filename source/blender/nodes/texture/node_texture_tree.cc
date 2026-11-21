@@ -131,6 +131,14 @@ static bool texture_node_tree_socket_type_valid(bke::bNodeTreeType * /*ntreetype
 
 bke::bNodeTreeType *ntreeType_Texture;
 
+/* The old texture node editor is replaced by the Texture Graph. It's only kept so files that use
+ * texture nodes still work, and only listed in an editor that is already showing one. */
+static bool texture_node_tree_poll(const bContext *C, bke::bNodeTreeType * /*treetype*/)
+{
+  const SpaceNode *snode = CTX_wm_space_node(C);
+  return snode && STREQ(snode->tree_idname, "TextureNodeTree");
+}
+
 void register_node_tree_type_tex()
 {
   bke::bNodeTreeType *tt = ntreeType_Texture = MEM_new<bke::bNodeTreeType>(__func__);
@@ -146,6 +154,7 @@ void register_node_tree_type_tex()
   tt->update = update;
   tt->localize = localize;
   tt->get_from_context = texture_get_from_context;
+  tt->poll = texture_node_tree_poll;
   tt->valid_socket_type = texture_node_tree_socket_type_valid;
 
   tt->rna_ext.srna = RNA_TextureNodeTree;

@@ -167,6 +167,21 @@ float carve_pattern_value(const CarvePatternParams &params,
                           const float3 &normal,
                           bool flat);
 
+/** A stone pattern read for a texture. */
+struct CarvePatternSample {
+  /** Height, 0 in the joints and up to 1 on the stones. */
+  float height = 0.0f;
+  /** A random value from 0 to 1, the same over each stone. */
+  float id = 0.0f;
+};
+
+/**
+ * A wall pattern over a square that repeats on all sides, for textures. \a uv goes from 0 to 1
+ * over the square, which is `params.scale` pattern units wide; the stones are fitted so a whole
+ * number of them fits across. Rotation and offset are not used. Noise, Voronoi and Waves give 0.
+ */
+CarvePatternSample carve_pattern_tiled(const CarvePatternParams &params, float2 uv);
+
 /** Moves the points of the mesh. Returns false if nothing was done. */
 bool mesh_carve(Mesh &mesh, const MeshCarveParams &params);
 

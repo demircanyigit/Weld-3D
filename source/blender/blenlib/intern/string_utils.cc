@@ -320,7 +320,11 @@ size_t BLI_string_flip_side_name(char *name_dst,
 
   /* We first check the case with a .### extension, let's find the last period */
   if (isdigit(name_dst[len - 1])) {
-    index = strrchr(name_dst, '.');   /* Last occurrence. */
+    index = strrchr(name_dst, '.'); /* Last occurrence. */
+    if (!(index && isdigit(index[1]))) {
+      /* Weld 3D: copies are numbered `bone.L_01`. */
+      index = strrchr(name_dst, '_');
+    }
     if (index && isdigit(index[1])) { /* Doesn't handle case `bone.1abc2` correct..., whatever! */
       if (strip_number == false) {
         BLI_strncpy_utf8(number, index, name_dst_maxncpy);
@@ -418,6 +422,24 @@ size_t BLI_string_flip_side_name(char *name_dst,
 
 /* Unique name utils. */
 
+/**
+ * Weld 3D: numbered copies are written `Name_01` instead of `Name.001`. Callers asking for the
+ * `.` delimiter get `_`, and names from older files that end in `.001` still count as numbered.
+ */
+static char uniquename_delim(const char delim)
+{
+  return delim == '.' ? '_' : delim;
+}
+
+static size_t uniquename_split(const char *name, const char delim, char *r_left, int *r_number)
+{
+  const size_t len = BLI_string_split_name_number(name, uniquename_delim(delim), r_left, r_number);
+  if (delim == '.' && name[len] == '\0') {
+    return BLI_string_split_name_number(name, '.', r_left, r_number);
+  }
+  return len;
+}
+
 void BLI_uniquename_cb(FunctionRef<bool(StringRefNull)> unique_check,
                        const char *defname,
                        char delim,
@@ -435,9 +457,9 @@ void BLI_uniquename_cb(FunctionRef<bool(StringRefNull)> unique_check,
     char *tempname = static_cast<char *>(alloca(name_maxncpy));
     char *left = static_cast<char *>(alloca(name_maxncpy));
     int number;
-    size_t len = BLI_string_split_name_number(name, delim, left, &number);
+    size_t len = uniquename_split(name, delim, left, &number);
     do {
-      const size_t numlen = SNPRINTF_UTF8(numstr, "%c%03d", delim, ++number);
+      const size_t numlen = SNPRINTF_UTF8(numstr, "%c%02d", uniquename_delim(delim), ++number);
 
       /* highly unlikely the string only has enough room for the number
        * but support anyway */
@@ -468,14 +490,13 @@ std::string BLI_uniquename_cb(FunctionRef<bool(StringRef)> unique_check,
 
   int number;
   Array<char> left_buffer(int64_t(new_name.size()) + 1);
-  const size_t len = BLI_string_split_name_number(
-      new_name.c_str(), delim, left_buffer.data(), &number);
+  const size_t len = uniquename_split(new_name.c_str(), delim, left_buffer.data(), &number);
 
   const std::string left = left_buffer.data();
 
   do {
     std::array<char, 16> num_str;
-    BLI_snprintf(num_str.data(), num_str.size(), "%c%03d", delim, ++number);
+    BLI_snprintf(num_str.data(), num_str.size(), "%c%02d", uniquename_delim(delim), ++number);
 
     if (len == 0) {
       new_name = num_str.data();

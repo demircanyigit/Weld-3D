@@ -89,7 +89,7 @@ static void deform_verts(ModifierData *md,
 {
   const NoiseModifierData &nmd = *reinterpret_cast<NoiseModifierData *>(md);
   geometry::NoiseDeformParams params;
-  params.strength = float3(nmd.strength);
+  params.strength = float3(nmd.strength) * nmd.strength_factor;
   params.scale = nmd.scale;
   params.phase = nmd.phase;
   params.fractal = nmd.flag & MOD_NOISE_FRACTAL;
@@ -110,6 +110,7 @@ static void panel_draw_Noise(const bContext * /*C*/, Panel *panel)
   UNUSED_VARS(ob_ptr);
 
   layout.use_property_split_set(true);
+  layout.prop(ptr, "strength_factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "strength", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "phase", UI_ITEM_NONE, std::nullopt, ICON_NONE);

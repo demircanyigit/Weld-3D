@@ -4509,6 +4509,25 @@ static void widget_preview_tile(Button *but,
   }
 
   const BIFIconID icon = button_icon(but);
+  if ((but->drawflag & BUT_ICON_NATIVE_SIZE) && icon < BIFICONID_LAST_STATIC) {
+    /* The icon at its own pixel size above the name, never scaled to the tile. The name gets two
+     * lines, so longer names wrap instead of being cut. */
+    const int text_height = but->drawstr.empty() ? 0 : int(UI_UNIT_Y * 1.6f);
+    rcti icon_rect = *rect;
+    icon_rect.ymin += text_height;
+    const float aspect = float(ICON_DEFAULT_HEIGHT) / float(ICON_DEFAULT_HEIGHT_TOOLBAR);
+    GPU_blend(GPU_BLEND_ALPHA);
+    widget_draw_icon_centered(icon, aspect, 1.0f, &icon_rect, wcol->text);
+    GPU_blend(GPU_BLEND_NONE);
+    if (text_height) {
+      rcti text_rect = *rect;
+      text_rect.ymax = text_rect.ymin + text_height;
+      BLI_rcti_pad(&text_rect, -int(PREVIEW_PAD), 0);
+      fontstyle_draw_multiline_clipped(
+          &style_get()->widget, &text_rect, but->drawstr.c_str(), wcol->text, UI_STYLE_TEXT_CENTER);
+    }
+    return;
+  }
   draw_preview_item_stateless(&style_get()->widget,
                               rect,
                               but->drawstr,

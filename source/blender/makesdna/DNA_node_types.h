@@ -273,6 +273,19 @@ enum {
   NTREE_COMPOSIT = 1,
   NTREE_TEXTURE = 2,
   NTREE_GEOMETRY = 3,
+  /** Texture Graph: node graphs that generate texture images. */
+  NTREE_TEXTURE_GRAPH = 4,
+  /** Tree Graph: node graphs that grow trees, used by the Tree modifier. */
+  NTREE_TREE_GRAPH = 5,
+};
+
+/** Texture Graph output size used when #bNodeTree.texture_graph_size is zero. */
+#define TEXTURE_GRAPH_DEFAULT_SIZE 1024
+
+/** #bNodeTree.texture_graph_flag */
+enum {
+  /** Don't update the images while the graph is edited, only on request. */
+  NTREE_TEXTURE_GRAPH_NO_AUTO_UPDATE = 1 << 0,
 };
 
 /** #NodeTree.flag */
@@ -1895,6 +1908,15 @@ struct bNodeTree {
    * should be ignored.
    */
   int default_group_node_width = 0;
+
+  /**
+   * Texture Graph output size in pixels. Zero means the default size (1024). Only used by
+   * #NTREE_TEXTURE_GRAPH trees.
+   */
+  int texture_graph_size[2] = {};
+  /** #NTREE_TEXTURE_GRAPH_NO_AUTO_UPDATE etc. */
+  int texture_graph_flag = 0;
+  char _pad_texture_graph[4] = {};
 
   rctf viewer_border = {};
 

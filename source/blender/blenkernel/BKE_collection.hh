@@ -260,6 +260,14 @@ void BKE_collection_object_move(
     Main *bmain, Scene *scene, Collection *collection_dst, Collection *collection_src, Object *ob);
 
 /**
+ * Weld 3D: move `ob` before or after `ob_relative` in the object list of `collection`.
+ * With `ob_relative` null it goes to the start (or end when `after`) of the list.
+ * Both objects must already be in the collection. Returns false if nothing changed.
+ */
+bool BKE_collection_object_reorder(
+    Main *bmain, Collection *collection, Object *ob, Object *ob_relative, bool after);
+
+/**
  * Remove object from all collections of scene
  */
 bool BKE_scene_collections_object_remove(Main *bmain, Scene *scene, Object *ob, bool free_us);

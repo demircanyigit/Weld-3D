@@ -8,6 +8,8 @@
  * Cover faces with blocks laid in a brick, stone or paving pattern.
  */
 
+#include <algorithm>
+
 #include "BLI_array.hh"
 #include "BLI_utildefines.h"
 #include "BLI_math_matrix.hh"
@@ -55,6 +57,8 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   MasonryModifierData *mmd = reinterpret_cast<MasonryModifierData *>(md);
   walk(user_data, ob, reinterpret_cast<ID **>(&mmd->center), IDWALK_CB_NOP);
+  MasonryModifierData *pick_data = reinterpret_cast<MasonryModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->block_material_pick), IDWALK_CB_USER);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -95,7 +99,16 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   params.depth = mmd.depth;
   params.mortar = mmd.mortar;
   params.offset = mmd.offset;
-  params.backing = mmd.flag & MOD_MASONRY_BACKING;
+  params.layers = std::max(mmd.layers, 1);
+  params.layer_gap = mmd.layer_gap;
+  params.damage = mmd.damage;
+  params.damage_amount = mmd.damage_amount;
+  params.damage_size = mmd.damage_size;
+  params.damage_mix = mmd.damage_mix;
+  params.damage_direction = mmd.damage_direction;
+  params.centered = mmd.flag & MOD_MASONRY_CENTERED;
+  /* The faces under the blocks are removed. */
+  params.backing = false;
   params.angle = mmd.angle;
   params.random_length = mmd.random_length;
   params.random_height = mmd.random_height;
@@ -113,8 +126,7 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
     params.center = to_self.location();
   }
   if (mmd.flag & MOD_MASONRY_MATERIALS) {
-    params.block_material = mmd.block_material;
-    params.mortar_material = mmd.mortar_material;
+    params.block_material = MOD_material_slot(*mesh, mmd.block_material_pick, mmd.block_material);
   }
 
   Array<bool> selection;
@@ -140,6 +152,9 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   }
 
   Mesh *result = geometry::mesh_masonry(*mesh, params);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (result == nullptr) {
     return mesh;
   }
@@ -169,16 +184,22 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   size.prop(ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   size.prop(ptr, "depth", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  ui::Layout &joint = layout.column(true);
-  joint.prop(ptr, "mortar", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  joint.prop(ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "mortar", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &thickness = layout.column(true);
+  thickness.prop(ptr, "layers", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &layer_gap = thickness.column(true);
+  layer_gap.active_set(RNA_int_get(ptr, "layers") > 1);
+  layer_gap.prop(ptr, "layer_gap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_centered", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &offset = layout.column(true);
+  offset.active_set(!RNA_boolean_get(ptr, "use_centered"));
+  offset.prop(ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   if (uses_rows(pattern)) {
     layout.prop(ptr, "soldier_rows", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
   ui::Layout &options = layout.column(true, IFACE_("Options"));
-  options.prop(ptr, "use_backing", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   options.prop(ptr, "use_border", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   options.prop(ptr, "use_toothed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   ui::Layout &continuity = options.column(true);
@@ -210,6 +231,28 @@ static void variation_panel_draw(const bContext * /*C*/, Panel *panel)
   layout.prop(ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
+static void damage_panel_draw(const bContext * /*C*/, Panel *panel)
+{
+  ui::Layout &layout = *panel->layout;
+  PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
+  const int damage = RNA_enum_get(ptr, "damage");
+
+  layout.use_property_split_set(true);
+  layout.prop(ptr, "damage", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &col = layout.column(true);
+  col.active_set(damage != MOD_MASONRY_DAMAGE_NONE);
+  col.prop(ptr, "damage_amount", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (damage != MOD_MASONRY_DAMAGE_NOISE) {
+    col.prop(ptr, "damage_direction", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  if (damage != MOD_MASONRY_DAMAGE_GRADIENT) {
+    col.prop(ptr, "damage_size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  if (damage == MOD_MASONRY_DAMAGE_BOTH) {
+    col.prop(ptr, "damage_mix", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+}
+
 static void materials_panel_header_draw(const bContext * /*C*/, Panel *panel)
 {
   ui::Layout &layout = *panel->layout;
@@ -225,8 +268,7 @@ static void materials_panel_draw(const bContext * /*C*/, Panel *panel)
   layout.use_property_split_set(true);
   ui::Layout &col = layout.column(true);
   col.active_set(RNA_boolean_get(ptr, "use_materials"));
-  col.prop(ptr, "block_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(ptr, "mortar_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_material_ui(col, ptr, "block_material_pick", "block_material", std::nullopt);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -236,6 +278,8 @@ static void panel_register(ARegionType *region_type)
   modifier_subpanel_register(
       region_type, "variation", "Variation", nullptr, variation_panel_draw, panel_type);
   modifier_subpanel_register(
+      region_type, "damage", "Damage", nullptr, damage_panel_draw, panel_type);
+  modifier_subpanel_register(
       region_type, "materials", "", materials_panel_header_draw, materials_panel_draw, panel_type);
 }
 
@@ -243,6 +287,9 @@ static void panel_register(ARegionType *region_type)
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   const MasonryModifierData &mmd = *reinterpret_cast<MasonryModifierData *>(md);
+  if (mmd.flag & MOD_MASONRY_MATERIALS) {
+    MOD_material_slot(*mesh, mmd.block_material_pick, 0);
+  }
   return MOD_cached_modify_mesh(
       md, ctx, mesh, modify_mesh_compute, [&](geometry::SimCacheHasher &hasher) {
         if (mmd.center != nullptr) {

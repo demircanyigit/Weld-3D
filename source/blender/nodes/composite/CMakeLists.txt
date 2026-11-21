@@ -109,15 +109,71 @@ set(SRC
   nodes/node_composite_translate.cc
   nodes/node_composite_vector_blur.cc
   nodes/node_composite_viewer.cc
+  nodes/node_texture_graph_adjust.cc
+  nodes/node_texture_graph_color_grade.cc
+  nodes/node_texture_graph_frequency.cc
+  nodes/node_texture_graph_histogram.cc
+  nodes/node_texture_graph_palette.cc
+  nodes/node_texture_graph_blend.cc
+  nodes/node_texture_graph_blend_modes.cc
+  nodes/node_texture_graph_blur.cc
+  nodes/node_texture_graph_channel_shuffle.cc
+  nodes/node_texture_graph_directional_warp.cc
+  nodes/node_texture_graph_distance.cc
+  nodes/node_texture_graph_emboss.cc
+  nodes/node_texture_graph_extrude.cc
+  nodes/node_texture_graph_fx_map.cc
+  nodes/node_texture_graph_height_to_normal.cc
+  nodes/node_texture_graph_levels.cc
+  nodes/node_texture_graph_noise.cc
+  nodes/node_texture_graph_pattern.cc
+  nodes/node_texture_graph_position.cc
+  nodes/node_texture_graph_random.cc
+  nodes/node_texture_graph_sample.cc
+  nodes/node_texture_graph_sharpen.cc
+  nodes/node_texture_graph_size.cc
+  nodes/node_texture_graph_svg.cc
+  nodes/node_texture_graph_text.cc
+  nodes/node_texture_graph_tile.cc
+  nodes/node_texture_graph_tiling_noise.cc
+  nodes/node_texture_graph_warp.cc
+  nodes/node_texture_graph_edge_detect.cc
+  nodes/node_texture_graph_effects.cc
+  nodes/node_texture_graph_shape_fx.cc
+  nodes/node_texture_graph_stone_walls.cc
+  nodes/node_texture_graph_flood_fill.cc
+  nodes/node_texture_graph_vector_warp.cc
+  nodes/node_texture_graph_normal_map.cc
+  nodes/node_texture_graph_transforms.cc
+  nodes/node_tree_graph_avoid.cc
+  nodes/node_tree_graph_branch_info.cc
+  nodes/node_tree_graph_branches.cc
+  nodes/node_tree_graph_leaves.cc
+  nodes/node_tree_graph_object_info.cc
+  nodes/node_tree_graph_output.cc
+  nodes/node_tree_graph_profile.cc
+  nodes/node_tree_graph_roots.cc
+  nodes/node_tree_graph_trunk.cc
+  nodes/node_tree_graph_drawn.cc
+  nodes/node_tree_graph_force.cc
+  nodes/node_tree_graph_crown.cc
+  nodes/node_tree_graph_bark.cc
+  nodes/node_tree_graph_prune.cc
+  nodes/node_tree_graph_fronds.cc
+  nodes/node_tree_graph_ivy.cc
 
   node_composite_tree.cc
   node_composite_util.cc
+  node_texture_graph_tree.cc
+  node_tree_graph_tree.cc
 
   include/NOD_compositor_file_output.hh
   node_composite_util.hh
 )
 
 set(LIB
+  PRIVATE bf::blenfont
+  PRIVATE bf::extern::nanosvg
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::blentranslation
@@ -125,6 +181,7 @@ set(LIB
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::functions
+  PRIVATE bf::geometry
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
   PRIVATE bf::intern::guardedalloc

@@ -232,6 +232,13 @@ struct SpaceNode_Runtime {
    */
   bool recalc_regular_compositing;
 
+  /** The Texture Graph shown in the editor changed and its images need to be recomputed. */
+  bool recalc_texture_graph;
+
+  /** What the Texture Graph looked like when it was last computed, to skip changes like moving
+   * nodes that do not change its images. Zero computes it again. */
+  uint64_t texture_graph_signature = 0;
+
   /** Temporary data for modal linking operator. */
   std::unique_ptr<bNodeLinkDrag> linkdrag;
 
@@ -441,6 +448,7 @@ void NODE_OT_add_collection(wmOperatorType *ot);
 void NODE_OT_add_image(wmOperatorType *ot);
 void NODE_OT_add_mask(wmOperatorType *ot);
 void NODE_OT_add_material(wmOperatorType *ot);
+void NODE_OT_add_library_node(wmOperatorType *ot);
 void NODE_OT_add_color(wmOperatorType *ot);
 void NODE_OT_add_import_node(wmOperatorType *ot);
 void NODE_OT_swap_group_asset(wmOperatorType *ot);
@@ -496,6 +504,8 @@ float2 node_link_calculate_multi_input_position(const float2 &socket_position,
                                                 int total_inputs);
 
 float node_socket_calculate_height(const bNodeSocket &socket);
+/** Links a multi-input socket makes room for. Tree Graph inputs always show as a tall bar. */
+int node_socket_multi_input_rows(const bNodeSocket &socket);
 
 bool composite_node_active(bContext *C);
 /** Operator poll callback. */

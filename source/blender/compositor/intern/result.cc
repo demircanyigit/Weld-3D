@@ -29,15 +29,18 @@
 
 namespace blender::compositor {
 
-Result::Result(Context &context) : context_(&context) {}
+Result::Result(Context &context) : context_(&context), wrap_edges_(context.wrap_edges()) {}
 
 Result::Result(Context &context, ResultType type, ResultPrecision precision)
-    : context_(&context), type_(type), precision_(precision)
+    : context_(&context), type_(type), precision_(precision), wrap_edges_(context.wrap_edges())
 {
 }
 
 Result::Result(Context &context, gpu::TextureFormat format)
-    : context_(&context), type_(Result::type(format)), precision_(Result::precision(format))
+    : context_(&context),
+      type_(Result::type(format)),
+      precision_(Result::precision(format)),
+      wrap_edges_(context.wrap_edges())
 {
 }
 
@@ -517,10 +520,13 @@ void Result::share_data(const Result &source)
   BLI_assert(type_ == source.type_);
   BLI_assert(!this->is_allocated() && source.is_allocated());
 
-  /* Overwrite everything except reference count. */
+  /* Overwrite everything except reference count and context, the source may come from an
+   * earlier evaluation whose context is gone. */
   const int reference_count = reference_count_;
+  Context *context = context_;
   *this = source;
   reference_count_ = reference_count;
+  context_ = context;
 
   /* External data is intrinsically shared, and data_reference_count_ is nullptr in this case since
    * it is not needed. */

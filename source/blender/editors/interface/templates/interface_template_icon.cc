@@ -6,9 +6,15 @@
  * \ingroup edinterface
  */
 
+#include <string>
+
+#include "MEM_guardedalloc.h"
+
 #include "BLI_string_ref.hh"
 
 #include "RNA_access.hh"
+
+#include "WM_types.hh"
 
 #include "UI_interface_layout.hh"
 #include "interface_intern.hh"
@@ -106,6 +112,70 @@ void template_icon(Layout *layout, int icon_value, float icon_scale)
                              0.0,
                              "");
   def_but_icon(but, icon_value, UI_HAS_ICON | BUT_ICON_PREVIEW);
+}
+
+static Button *node_tile_button(
+    Block *block, int icon, StringRef text, float width, std::optional<StringRef> tip)
+{
+  const int tile_width = int(UI_UNIT_X * width);
+  /* Room for a 32 pixel icon, two lines of name below it and a little space around both. */
+  const int tile_height = int(ICON_DEFAULT_HEIGHT_TOOLBAR * UI_SCALE_FAC + UI_UNIT_Y * 2.2f);
+  Button *but = uiDefIconTextButO(block,
+                                  ButtonType::PreviewTile,
+                                  "NODE_OT_add_library_node",
+                                  wm::OpCallContext::InvokeDefault,
+                                  icon,
+                                  text,
+                                  0,
+                                  0,
+                                  tile_width,
+                                  tile_height,
+                                  tip);
+  but->drawflag |= BUT_ICON_NATIVE_SIZE;
+  return but;
+}
+
+void template_node_tile(Layout *layout,
+                        StringRefNull node_type,
+                        StringRef text,
+                        int icon,
+                        StringRef tooltip,
+                        float width,
+                        const bool as_row)
+{
+  /* A row stretches with the layout, a tile keeps its size. */
+  Block *block = as_row ? layout->block() : layout->absolute().block();
+  const std::optional<StringRef> tip = tooltip.is_empty() ? std::nullopt :
+                                                            std::optional<StringRef>(tooltip);
+  Button *but;
+  if (as_row) {
+    /* List view: one row with the small icon and the name. */
+    const EmbossType emboss = block->emboss;
+    block_emboss_set(block, EmbossType::Pulldown);
+    but = uiDefIconTextButO(block,
+                            ButtonType::But,
+                            "NODE_OT_add_library_node",
+                            wm::OpCallContext::InvokeDefault,
+                            icon,
+                            text,
+                            0,
+                            0,
+                            int(UI_UNIT_X * width),
+                            UI_UNIT_Y,
+                            tip);
+    block_emboss_set(block, emboss);
+    but->drawflag |= BUT_TEXT_LEFT | BUT_ICON_LEFT;
+  }
+  else {
+    but = node_tile_button(block, icon, text, width, tip);
+  }
+  PointerRNA *ptr = button_operator_ptr_ensure(but);
+  RNA_string_set(ptr, "type", node_type.c_str());
+
+  /* Dragging onto the graph adds the node where it's dropped. */
+  but->dragtype = WM_DRAG_STRING;
+  but->dragpoin = MEM_new<std::string>(__func__, "node_type:" + std::string(node_type));
+  but->dragflag |= BUT_DRAGPOIN_FREE | BUT_DRAG_FULL_BUT;
 }
 
 void template_icon_view(Layout *layout,

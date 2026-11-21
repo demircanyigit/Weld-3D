@@ -87,6 +87,44 @@ static float fbm(const float x, const float y, const float channel, const int oc
   return sum / total;
 }
 
+/**
+ * Octaves of value noise that repeat: \a p is in pattern units, the noise has \a freq lattice
+ * cells per unit, rounded so a whole number of them fits in \a period.
+ */
+static float fbm_wrap(const float2 p,
+                      const float2 period,
+                      const float freq,
+                      const float channel,
+                      const int octaves)
+{
+  float2 cells(std::max(std::round(period.x * freq), 1.0f),
+               std::max(std::round(period.y * freq), 1.0f));
+  float sum = 0.0f;
+  float weight = 1.0f;
+  float total = 0.0f;
+  for (int o = 0; o < octaves; o++) {
+    const float x = p.x * cells.x / period.x + 17.3f * float(o);
+    const float y = p.y * cells.y / period.y - 9.1f * float(o);
+    const float ix = std::floor(x);
+    const float iy = std::floor(y);
+    const float ux = smooth01(x - ix);
+    const float uy = smooth01(y - iy);
+    auto wrap = [](const float i, const float n) { return i - n * std::floor(i / n); };
+    const float x0 = wrap(ix, cells.x), x1 = wrap(ix + 1.0f, cells.x);
+    const float y0 = wrap(iy, cells.y), y1 = wrap(iy + 1.0f, cells.y);
+    const float a = hash3(x0, y0, channel);
+    const float b = hash3(x1, y0, channel);
+    const float c = hash3(x0, y1, channel);
+    const float d = hash3(x1, y1, channel);
+    const float v = (a + (b - a) * ux) + ((c + (d - c) * ux) - (a + (b - a) * ux)) * uy;
+    sum += (v - 0.5f) * weight;
+    total += weight;
+    weight *= 0.5f;
+    cells *= 2.0f;
+  }
+  return sum / total;
+}
+
 /* Plain allocations: layouts are cached until Blender quits. */
 template<typename T> using Vec = Vector<T, 4, RawAllocator>;
 
@@ -383,11 +421,23 @@ static std::unique_ptr<Layout> build_fitted(FittedStyle st,
                                             const uint32_t seed,
                                             const float lenf,
                                             const float rowf,
-                                            const float varf)
+                                            const float varf,
+                                            const float2 period)
 {
   Rng rng(seed);
   st.L *= lenf;
   st.Hc *= rowf;
+  /* For textures, as many stones as fit in the period, so the tile is about its size. */
+  if (period.x > 0.0f && period.y > 0.0f) {
+    /* Row Height sizes the stones and Stone Length is their shape; and calmer lines. */
+    st.L *= rowf;
+    st.shake *= 0.45f;
+    st.jh *= 0.6f;
+    st.wave *= 0.5f;
+    st.extra *= 0.6f;
+    st.cols = std::clamp(int(std::round(period.x / st.L)), 3, 96);
+    st.rows = std::clamp(int(std::round(period.y / st.Hc)), 3, 96);
+  }
   st.jl = std::min(st.jl * varf, 0.8f);
   st.jh = std::min(st.jh * varf, 0.6f);
   st.shake = std::min(st.shake * varf, 0.45f);
@@ -599,6 +649,7 @@ static PackedStyle packed_style(const CarvePattern pattern)
   switch (pattern) {
     case CarvePattern::PackedRound:
       s.shapes = {{Shape::Round, 1.0f}};
+      s.filler = Shape::Round;
       break;
     case CarvePattern::PackedAngular:
       s.shapes = {{Shape::Angular, 1.0f}};
@@ -607,15 +658,18 @@ static PackedStyle packed_style(const CarvePattern pattern)
     case CarvePattern::PackedBlocks:
       s.shapes = {{Shape::Blocky, 1.0f}};
       s.aspect_lo = 1.3f, s.aspect_hi = 2.6f, s.tilt = 4.0f, s.w_match = 0.3f, s.size = 0.12f;
+      s.filler = Shape::Blocky;
       break;
     case CarvePattern::PackedSlabs:
       s.shapes = {{Shape::Slab, 1.0f}};
       s.aspect_lo = 3.0f, s.aspect_hi = 6.0f, s.tilt = 3.0f, s.w_match = 0.35f;
       s.size = 0.11f, s.w_gap = 3.0f;
+      s.filler = Shape::Slab;
       break;
     case CarvePattern::PackedWedges:
       s.shapes = {{Shape::Wedge, 1.0f}};
       s.aspect_lo = 1.2f, s.aspect_hi = 2.4f, s.tilt = 6.0f;
+      s.filler = Shape::Wedge;
       break;
     case CarvePattern::PackedMixed:
       s.shapes = {{Shape::Angular, 3.0f},
@@ -870,15 +924,21 @@ static Pose make_pose(Poly pts, const float cell)
 static std::unique_ptr<Layout> build_packed(PackedStyle st,
                                             const uint32_t seed,
                                             const float lenf,
-                                            const float varf)
+                                            const float varf,
+                                            const float2 period)
 {
   Rng rng(seed);
   st.size *= lenf;
   st.size_var = std::min(st.size_var * varf, 0.9f);
   st.tilt *= varf;
   const float cell = st.size / 8.0f;
-  const int W = 320;
-  const int Hgrid = 200;
+  int W = 320;
+  int Hgrid = 200;
+  /* For textures, a grid about the size of the period. */
+  if (period.x > 0.0f && period.y > 0.0f) {
+    W = std::clamp(int(std::round(period.x / cell)), 64, 640);
+    Hgrid = std::clamp(int(std::round(period.y / cell)), 64, 480);
+  }
   const int Htot = Hgrid + 64;
   const int GAP = 1;
   const float Wt = float(W) * cell;
@@ -908,8 +968,11 @@ static std::unique_ptr<Layout> build_packed(PackedStyle st,
     surf[c] = floor[c];
   }
 
+  /* Smaller stones are used when none fits, which happens where the top meets the next tile. */
+  float shrink = 1.0f;
   auto make_stone = [&]() {
-    const float size = std::clamp(std::exp(rng.normal() * st.size_var), 0.45f, 2.2f) * st.size;
+    const float size = std::clamp(std::exp(rng.normal() * st.size_var), 0.45f, 2.2f) * st.size *
+                       shrink;
     const float aspect = rng.range(st.aspect_lo, st.aspect_hi);
     return stone_shape(rng, size, aspect, pick_shape(rng, st), st);
   };
@@ -1062,7 +1125,14 @@ static std::unique_ptr<Layout> build_packed(PackedStyle st,
       }
     }
     if (best_pool < 0) {
-      break;
+      if (shrink < 0.4f) {
+        break;
+      }
+      shrink *= 0.7f;
+      for (Poly &stone : pool) {
+        stone = make_stone();
+      }
+      continue;
     }
     stamp(best_pose, best_x, best_y);
     pool[best_pool] = make_stone();
@@ -1152,9 +1222,10 @@ static bool is_packed(const CarvePattern pattern)
   }
 }
 
-using Key = std::tuple<int, int, int, int, int>;
+using Key = std::tuple<int, int, int, int, int, int, int>;
 
-static std::shared_ptr<const Layout> get_layout(const CarvePatternParams &params)
+static std::shared_ptr<const Layout> get_layout(const CarvePatternParams &params,
+                                                const float2 period)
 {
   const float lenf = std::max(params.stone_length, 1e-3f) / 0.8f;
   const float rowf = std::max(params.row_height, 1e-3f) / 0.25f;
@@ -1164,9 +1235,11 @@ static std::shared_ptr<const Layout> get_layout(const CarvePatternParams &params
                 params.seed,
                 int(std::round(lenf * 1000.0f)),
                 packed ? 0 : int(std::round(rowf * 1000.0f)),
-                int(std::round(varf * 1000.0f)));
+                int(std::round(varf * 1000.0f)),
+                int(std::round(period.x * 1000.0f)),
+                int(std::round(period.y * 1000.0f)));
 
-  thread_local Key last_key(-1, 0, 0, 0, 0);
+  thread_local Key last_key(-1, 0, 0, 0, 0, 0, 0);
   thread_local std::shared_ptr<const Layout> last;
   if (last && key == last_key) {
     return last;
@@ -1183,10 +1256,10 @@ static std::shared_ptr<const Layout> get_layout(const CarvePatternParams &params
     const uint32_t seed = noise::hash(uint32_t(params.pattern) + 7919u, uint32_t(params.seed));
     std::shared_ptr<const Layout> layout;
     if (packed) {
-      layout = build_packed(packed_style(params.pattern), seed, lenf, varf);
+      layout = build_packed(packed_style(params.pattern), seed, lenf, varf, period);
     }
     else {
-      layout = build_fitted(fitted_style(params.pattern), seed, lenf, rowf, varf);
+      layout = build_fitted(fitted_style(params.pattern), seed, lenf, rowf, varf, period);
     }
     it = cache.emplace(key, std::move(layout)).first;
   }
@@ -1203,10 +1276,13 @@ static std::shared_ptr<const Layout> get_layout(const CarvePatternParams &params
 /** \name Evaluate
  * \{ */
 
-float carve_layout_wall(const float2 p, const CarvePatternParams &params)
+float carve_layout_wall(float2 p,
+                        const CarvePatternParams &params,
+                        float2 period,
+                        float *r_id)
 {
   using namespace carve_layout;
-  const std::shared_ptr<const Layout> layout_ptr = get_layout(params);
+  const std::shared_ptr<const Layout> layout_ptr = get_layout(params, period);
   const Layout &layout = *layout_ptr;
 
   const float mortf = std::max(params.mortar, 0.0f) / 0.02f;
@@ -1217,17 +1293,35 @@ float carve_layout_wall(const float2 p, const CarvePatternParams &params)
   const float bevel = std::max(layout.bevel * std::max(roundf, 0.2f), 1e-5f);
   const float unit = layout.unit;
 
+  /* For textures: a whole number of layout tiles fills the period, so the square repeats. */
+  const bool tiled = period.x > 0.0f && period.y > 0.0f;
+  if (tiled) {
+    const float2 tiles(std::max(std::round(period.x / layout.tile.x), 1.0f),
+                       std::max(std::round(period.y / layout.tile.y), 1.0f));
+    const float2 fitted = tiles * layout.tile;
+    p = p / period * fitted;
+    period = fitted;
+  }
+  auto noise = [&](const float freq, const float channel, const int octaves) {
+    return tiled ? fbm_wrap(p, period, freq, channel, octaves) :
+                   fbm(p.x * freq, p.y * freq, channel, octaves);
+  };
+
   const float2 q(p.x - std::floor(p.x / layout.tile.x) * layout.tile.x,
                  p.y - std::floor(p.y / layout.tile.y) * layout.tile.y);
   const int bx = std::clamp(int(q.x / layout.tile.x * layout.nx), 0, layout.nx - 1);
   const int by = std::clamp(int(q.y / layout.tile.y * layout.ny), 0, layout.ny - 1);
 
   /* Noise is read at the point itself, so it does not repeat with the tile. */
-  const float edge_noise = fbm(p.x / unit * 16.0f, p.y / unit * 16.0f, 81.0f, 4);
-  const float joint_noise = fbm(p.x / unit * 2.5f, p.y / unit * 2.5f, 82.0f, 3);
+  /* Textures get gently wavy outlines, rough only as much as asked; carving keeps chips. */
+  const float edge_noise = tiled ? (noise(5.0f / unit, 81.0f, 2) - 0.5f) *
+                                       std::max(params.roughness, 0.0f) * 2.0f :
+                                   noise(16.0f / unit, 81.0f, 4);
+  const float joint_noise = noise(2.5f / unit, 82.0f, 3) * (tiled ? 0.4f : 1.0f);
   const float margin = rough * 3.0f;
 
   float best = 0.0f;
+  float best_inner = -1e30f;
   for (const Bin &bin : layout.bins[by * layout.nx + bx]) {
     const Stone &s = layout.stones[bin.stone];
     const float2 x = q - bin.shift;
@@ -1279,14 +1373,32 @@ float carve_layout_wall(const float2 p, const CarvePatternParams &params)
     if (inner <= e) {
       continue;
     }
+    const float2 uv = (x - s.center) / s.half;
+    if (tiled) {
+      /* For textures: soft, domed stones of their own heights, with room to the top. */
+      const float tb = std::min((inner - e) / ((0.04f + 0.25f * roundf * 0.5f) * unit), 1.0f);
+      const float edge = tb * tb * (3.0f - 2.0f * tb);
+      const float rnd = std::clamp(params.roundness, 0.0f, 1.0f);
+      float top = (1.0f - (0.1f + 0.25f * rnd) * std::min(math::dot(uv, uv), 2.0f) * 0.5f) *
+                  (1.0f - 0.35f * s.id);
+      top += std::max(params.roughness, 0.0f) * 0.25f * (noise(4.0f / unit, 24.0f, 4) - 0.5f);
+      best = std::max(best, 0.9f * edge * std::clamp(top, 0.0f, 1.0f));
+      if (r_id && inner > best_inner) {
+        best_inner = inner;
+        *r_id = s.id;
+      }
+      continue;
+    }
     const float t = std::min((inner - e) / bevel, 1.0f);
     const float shoulder = std::sqrt(t * (2.0f - t));
-    const float2 uv = (x - s.center) / s.half;
     float face = (1.0f - 0.12f * std::clamp(math::dot(uv, uv), 0.0f, 2.0f)) *
                  (1.0f - 0.3f * s.id);
-    face += std::max(params.roughness, 0.0f) * 0.08f *
-            fbm(p.x / unit * 6.0f, p.y / unit * 6.0f, 24.0f, 4);
+    face += std::max(params.roughness, 0.0f) * 0.08f * noise(6.0f / unit, 24.0f, 4);
     best = std::max(best, shoulder * std::clamp(face, 0.0f, 1.3f));
+    if (r_id && inner > best_inner) {
+      best_inner = inner;
+      *r_id = s.id;
+    }
   }
   return std::clamp(best, 0.0f, 1.0f);
 }

@@ -25,6 +25,7 @@
 #include "DNA_mesh_types.h"
 
 #include "BLI_array.hh"
+#include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_vector.hh"
@@ -1138,13 +1139,18 @@ void build_block(BlockMeshData &data,
                  const float3 &v,
                  const float3 &n,
                  const float plane,
-                 const int material)
+                 const int material,
+                 const float layer_base,
+                 const bool random_depth)
 {
   const int count = outline.size();
   const float area = std::abs(signed_area(outline));
-  const float depth_random = (noise::hash_to_float(id, 11) - 0.5f) * params.random_depth;
+  const float depth_random = random_depth ?
+                                 (noise::hash_to_float(id, 11) - 0.5f) * params.random_depth :
+                                 0.0f;
   const float depth = std::max(params.depth * (1.0f + depth_random), params.depth * 0.2f);
-  const float base = -params.offset * params.depth;
+  /* Centered blocks grow from the middle of their layer, the others from its bottom. */
+  const float base = params.centered ? layer_base + (params.depth - depth) * 0.5f : layer_base;
   auto to_3d = [&](const float2 &q, const float w) { return u * q.x + v * q.y + n * (plane + w); };
 
   const int first_vert = data.positions.size();
@@ -1308,6 +1314,14 @@ struct WallPatch {
   Vector<int> faces;
   Vector<Polygon> face_outlines;
   Polygon outline;
+  /** Per face: where it starts and ends along the wall, and the directions the blocks grow in at
+   * those two sides. Where the wall bends, the two faces share the halfway direction, so blocks
+   * that stick out bend with the wall instead of fanning apart. */
+  Vector<float2> face_x;
+  Vector<float3> face_n_start;
+  Vector<float3> face_n_end;
+  /** Where the wall bends, along the wall. The blocks are cut there to follow it. */
+  Vector<float> bends;
 };
 
 struct WallBoundary {
@@ -1393,6 +1407,51 @@ Vector<WallPatch> wall_patches(const Mesh &mesh,
     }
     if (patch.faces.size() < 2) {
       continue;
+    }
+    for (const int face : patch.faces) {
+      float2 range(FLT_MAX, -FLT_MAX);
+      for (const int vert : corner_verts.slice(faces[face])) {
+        const float x = coordinate(face, vert).x;
+        range = float2(std::min(range.x, x), std::max(range.y, x));
+      }
+      float3 n_start = normals[face], n_end = normals[face];
+      for (const int corner : faces[face]) {
+        const int edge = corner_edges[corner];
+        const int other = neighbor(edge, face);
+        if (!can_cross(face, other, edge) || component_id[other] != root) {
+          continue;
+        }
+        const float2 qa = coordinate(face, edges[edge][0]), qb = coordinate(face, edges[edge][1]);
+        if (std::abs(qa.x - qb.x) > tolerance) {
+          continue;
+        }
+        const float cos_angle = math::dot(normals[face], normals[other]);
+        if (cos_angle > 1.0f - 1e-6f) {
+          continue;
+        }
+        /* The mitre direction: halfway, and long enough that the blocks keep their depth. */
+        const float3 mitre = (normals[face] + normals[other]) / (1.0f + cos_angle);
+        if (std::abs(qa.x - range.x) < std::abs(qa.x - range.y)) {
+          n_start = mitre;
+        }
+        else {
+          n_end = mitre;
+        }
+        patch.bends.append(qa.x);
+      }
+      patch.face_x.append(range);
+      patch.face_n_start.append(n_start);
+      patch.face_n_end.append(n_end);
+    }
+    std::sort(patch.bends.begin(), patch.bends.end());
+    {
+      Vector<float> unique;
+      for (const float x : patch.bends) {
+        if (unique.is_empty() || x - unique.last() > tolerance) {
+          unique.append(x);
+        }
+      }
+      patch.bends = std::move(unique);
     }
     Vector<WallBoundary> boundary;
     Map<int, Vector<int>> starts;
@@ -1488,15 +1547,19 @@ Vector<WallPatch> wall_patches(const Mesh &mesh,
   return patches;
 }
 
-/** Choose the surface frame under a brick's center, extrapolating at toothed boundaries. */
-int wall_sample_face(const WallPatch &patch, const float2 &point)
+/** Choose the face of the patch under a point, extrapolating at toothed boundaries. Returns the
+ * index into the patch's faces. #hint is tried first. */
+int wall_sample_index(const WallPatch &patch, const float2 &point, const int hint = -1)
 {
-  int result = patch.faces[0];
+  if (hint >= 0 && point_inside(patch.face_outlines[hint], point)) {
+    return hint;
+  }
+  int result = 0;
   float best = FLT_MAX;
   for (const int i : patch.faces.index_range()) {
     const Polygon &outline = patch.face_outlines[i];
     if (point_inside(outline, point)) {
-      return patch.faces[i];
+      return i;
     }
     for (const int j : outline.index_range()) {
       const float2 a = outline[j], delta = outline[(j + 1) % outline.size()] - a;
@@ -1507,7 +1570,41 @@ int wall_sample_face(const WallPatch &patch, const float2 &point)
       const float distance = math::distance_squared(point, a + t * delta);
       if (distance < best) {
         best = distance;
-        result = patch.faces[i];
+        result = i;
+      }
+    }
+  }
+  return result;
+}
+
+/** Cuts the outline's edges where the wall bends, so the block can follow it. #x_of gives the
+ * position along the wall of an outline point. */
+Polygon cut_at_bends(const Span<float2> outline,
+                     const Span<float> bends,
+                     const FunctionRef<float(float2)> x_of)
+{
+  if (bends.is_empty()) {
+    return Polygon(outline);
+  }
+  Polygon result;
+  for (const int i : outline.index_range()) {
+    const float2 a = outline[i], b = outline[(i + 1) % outline.size()];
+    const float xa = x_of(a), xb = x_of(b);
+    result.append(a);
+    if (std::abs(xb - xa) < 1e-7f) {
+      continue;
+    }
+    const float lo = std::min(xa, xb), hi = std::max(xa, xb);
+    const int first = std::upper_bound(bends.begin(), bends.end(), lo) - bends.begin();
+    const int last = std::lower_bound(bends.begin(), bends.end(), hi) - bends.begin();
+    if (xb > xa) {
+      for (int j = first; j < last; j++) {
+        result.append(math::interpolate(a, b, (bends[j] - xa) / (xb - xa)));
+      }
+    }
+    else {
+      for (int j = last - 1; j >= first; j--) {
+        result.append(math::interpolate(a, b, (bends[j] - xa) / (xb - xa)));
       }
     }
   }
@@ -1517,6 +1614,58 @@ int wall_sample_face(const WallPatch &patch, const float2 &point)
 /** \} */
 
 }  // namespace
+
+/** Thickness of all the layers together, with a joint between each two. */
+static float layers_thickness(const MeshMasonryParams &params)
+{
+  const int layers = std::max(params.layers, 1);
+  return float(layers) * params.depth + float(layers - 1) * std::max(params.layer_gap, 0.0f);
+}
+
+/** Where the first layer starts, measured out of the face. */
+static float layers_start(const MeshMasonryParams &params)
+{
+  const float thickness = layers_thickness(params);
+  return params.centered ? -thickness * 0.5f : -params.offset * thickness;
+}
+
+/** Whether damage removes the block whose middle is at #p. */
+static bool block_damaged(const MeshMasonryParams &params,
+                          const Bounds<float3> &bounds,
+                          const float3 &p)
+{
+  if (params.damage <= 0 || params.damage_amount <= 0.0f) {
+    return false;
+  }
+  if (params.damage_amount >= 1.0f) {
+    return true;
+  }
+  float noise_value = 0.5f;
+  if (params.damage != 2) {
+    const float3 offset(noise::hash_to_float(uint32_t(params.seed), 21u) * 1000.0f,
+                        noise::hash_to_float(uint32_t(params.seed), 22u) * 1000.0f,
+                        noise::hash_to_float(uint32_t(params.seed), 23u) * 1000.0f);
+    const float n = noise::perlin_fbm<float3>(
+        p / std::max(params.damage_size, 1e-4f) + offset, 2.0f, 0.5f, 2.0f, true);
+    /* The noise stays near the middle, spread it out so the amount reads as a share. */
+    noise_value = std::clamp((n - 0.5f) * 2.5f + 0.5f, 0.0f, 1.0f);
+  }
+  float gradient_value = 0.5f;
+  if (params.damage != 1) {
+    const int axis = std::clamp(params.damage_direction, 0, 5) / 2;
+    const float size = bounds.max[axis] - bounds.min[axis];
+    const float t = size > 1e-8f ? (p[axis] - bounds.min[axis]) / size : 0.5f;
+    gradient_value = (params.damage_direction % 2 == 0) ? t : 1.0f - t;
+  }
+  float value = noise_value;
+  if (params.damage == 2) {
+    value = gradient_value;
+  }
+  else if (params.damage == 3) {
+    value = math::interpolate(gradient_value, noise_value, std::clamp(params.damage_mix, 0.0f, 1.0f));
+  }
+  return value > 1.0f - params.damage_amount;
+}
 
 Mesh *mesh_masonry(const Mesh &mesh, const MeshMasonryParams &params)
 {
@@ -1541,6 +1690,7 @@ Mesh *mesh_masonry(const Mesh &mesh, const MeshMasonryParams &params)
   }
 
   const uint32_t seed_hash = noise::hash(uint32_t(params.seed) + 1u);
+  const Bounds<float3> mesh_bounds = *mesh.bounds_min_max();
   const float gap = std::max(params.mortar, 0.0f);
   BlockMeshData data;
   Array<bool> covered(mesh.faces_num, false);
@@ -1594,84 +1744,154 @@ Mesh *mesh_masonry(const Mesh &mesh, const MeshMasonryParams &params)
       continue;
     }
 
-    Vector<Block> blocks;
-    PatternContext ctx{
-        params, {}, float2(math::dot(center, u), math::dot(center, v)), seed_hash, gap, blocks};
-    ctx.box.min = float2(FLT_MAX);
-    ctx.box.max = float2(-FLT_MAX);
-    for (const float2 &q : outline) {
-      ctx.box.min = math::min(ctx.box.min, q);
-      ctx.box.max = math::max(ctx.box.max, q);
-    }
-    const float block_area = std::max(params.length * params.height, 1e-8f);
-    const float2 box_size = ctx.box.max - ctx.box.min;
-    if (box_size.x * box_size.y / block_area > float(MAX_BLOCKS_PER_FACE)) {
-      continue;
-    }
-
-    const bool face_convex = is_convex(outline);
-    Polygon fill_outline = outline;
-    if (params.border && face_convex) {
-      fill_outline = add_border(ctx, outline);
-      for (Block &block : blocks) {
-        /* Border blocks are already inside the face. */
-        block.id = ~block.id;
+    const int layers = std::max(params.layers, 1);
+    const float first_base = layers_start(params);
+    const float2 pattern_center = float2(math::dot(center, u), math::dot(center, v));
+    bool skip_face = false;
+    for (const int layer : IndexRange(layers)) {
+      /* Every other layer is shifted half a block along the rows. The pattern is laid out on the
+       * face moved the other way, then the blocks are moved back. */
+      const float2 shift((layer & 1) ? params.length * 0.5f : 0.0f, 0.0f);
+      const float layer_base = first_base +
+                               float(layer) * (params.depth + std::max(params.layer_gap, 0.0f));
+      Polygon layer_outline = outline;
+      for (float2 &q : layer_outline) {
+        q -= shift;
       }
-    }
-    const int border_count = blocks.size();
-    generate(ctx);
-    if (ctx.too_many) {
-      continue;
-    }
 
-    const bool fill_convex = is_convex(fill_outline);
-    for (const int i : blocks.index_range()) {
-      Block &block = blocks[i];
-      Polygon shape = std::move(block.outline);
-      if (params.stone_shape > 0.0f) {
-        shape = stone_outline(shape, params.stone_shape, block.id);
+      Vector<Block> blocks;
+      PatternContext ctx{params, {}, pattern_center - shift, seed_hash, gap, blocks};
+      ctx.box.min = float2(FLT_MAX);
+      ctx.box.max = float2(-FLT_MAX);
+      for (const float2 &q : layer_outline) {
+        ctx.box.min = math::min(ctx.box.min, q);
+        ctx.box.max = math::max(ctx.box.max, q);
       }
-      if (i >= border_count) {
-        if (params.toothed) {
-          if (!point_inside(fill_outline, centroid(shape))) {
+      const float block_area = std::max(params.length * params.height, 1e-8f);
+      const float2 box_size = ctx.box.max - ctx.box.min;
+      if (box_size.x * box_size.y / block_area > float(MAX_BLOCKS_PER_FACE)) {
+        skip_face = true;
+        break;
+      }
+
+      const bool face_convex = is_convex(layer_outline);
+      Polygon fill_outline = layer_outline;
+      if (params.border && face_convex) {
+        fill_outline = add_border(ctx, layer_outline);
+        for (Block &block : blocks) {
+          /* Border blocks are already inside the face. */
+          block.id = ~block.id;
+        }
+      }
+      const int border_count = blocks.size();
+      generate(ctx);
+      if (ctx.too_many) {
+        skip_face = true;
+        break;
+      }
+
+      const bool fill_convex = is_convex(fill_outline);
+      for (const int i : blocks.index_range()) {
+        Block &block = blocks[i];
+        if (layer > 0) {
+          /* Blocks of different layers differ even where they line up. */
+          block.id = noise::hash(block.id, uint32_t(layer));
+        }
+        Polygon shape = std::move(block.outline);
+        if (params.stone_shape > 0.0f) {
+          shape = stone_outline(shape, params.stone_shape, block.id);
+        }
+        if (i >= border_count) {
+          if (params.toothed) {
+            if (!point_inside(fill_outline, centroid(shape))) {
+              continue;
+            }
+          }
+          else if (!fully_inside(shape, fill_outline)) {
+            if (is_convex(shape)) {
+              shape = clip(fill_outline, shape);
+            }
+            else if (fill_convex) {
+              shape = clip(shape, fill_outline);
+            }
+            else if (!point_inside(fill_outline, centroid(shape))) {
+              continue;
+            }
+          }
+        }
+        if (shape.size() < 3 || std::abs(signed_area(shape)) < block_area * 1e-3f) {
+          continue;
+        }
+        for (float2 &q : shape) {
+          q += shift;
+        }
+        const float2 middle = centroid(shape);
+        const float3 flat_middle = u * middle.x + v * middle.y;
+        const int sample_index = patch ?
+                                     wall_sample_index(*patch,
+                                                       float2(flat_middle.x, flat_middle.y)) :
+                                     -1;
+        const int sample = patch ? patch->faces[sample_index] : face;
+        if (params.damage > 0) {
+          float3 block_middle;
+          if (patch) {
+            const float3 wall_n = face_normals[sample];
+            block_middle = wall_directions[sample] * (flat_middle.x - wall_shifts[sample]) +
+                           float3(0, 0, flat_middle.y) +
+                           wall_n * (math::dot(positions[corner_verts[faces[sample].start()]],
+                                               wall_n) +
+                                     layer_base);
+          }
+          else {
+            block_middle = flat_middle + n * (plane + layer_base);
+          }
+          if (block_damaged(params, mesh_bounds, block_middle)) {
             continue;
           }
         }
-        else if (!fully_inside(shape, fill_outline)) {
-          if (is_convex(shape)) {
-            shape = clip(fill_outline, shape);
-          }
-          else if (fill_convex) {
-            shape = clip(shape, fill_outline);
-          }
-          else if (!point_inside(fill_outline, centroid(shape))) {
-            continue;
+        if (patch) {
+          shape = cut_at_bends(
+              shape, patch->bends, [&](const float2 q) { return u.x * q.x + v.x * q.y; });
+        }
+        const int material = params.block_material >= 0 ? params.block_material : materials[sample];
+        const int first_vert = data.positions.size();
+        /* Random depth only on the outer layer, so the layers don't run into each other. */
+        build_block(data,
+                    params,
+                    shape,
+                    block.id,
+                    u,
+                    v,
+                    n,
+                    plane,
+                    material,
+                    layer_base,
+                    layer == layers - 1);
+        if (patch) {
+          /* Each point goes onto the wall where it is along it, and out along the wall's
+           * direction there, so the block bends with the wall. */
+          for (const int vert : IndexRange(first_vert, data.positions.size() - first_vert)) {
+            const float3 p = data.positions[vert];
+            const int index = wall_sample_index(*patch, float2(p.x, p.y), sample_index);
+            const int wall_face = patch->faces[index];
+            const float3 wall_u = wall_directions[wall_face];
+            const float3 wall_n = face_normals[wall_face];
+            const float surface_plane = math::dot(
+                positions[corner_verts[faces[wall_face].start()]], wall_n);
+            const float2 range = patch->face_x[index];
+            const float t = range.y - range.x > 1e-7f ?
+                                std::clamp((p.x - range.x) / (range.y - range.x), 0.0f, 1.0f) :
+                                0.5f;
+            const float3 out = math::interpolate(
+                patch->face_n_start[index], patch->face_n_end[index], t);
+            data.positions[vert] = wall_u * (p.x - wall_shifts[wall_face]) +
+                                   float3(0, 0, p.y) + wall_n * surface_plane + out * p.z;
           }
         }
       }
-      if (shape.size() < 3 || std::abs(signed_area(shape)) < block_area * 1e-3f) {
-        continue;
-      }
-      const float2 middle = centroid(shape);
-      const float3 flat_middle = u * middle.x + v * middle.y;
-      const int sample = patch ? wall_sample_face(*patch, float2(flat_middle.x, flat_middle.y)) :
-                                 face;
-      const int material = params.block_material >= 0 ? params.block_material : materials[sample];
-      const int first_vert = data.positions.size();
-      build_block(data, params, shape, block.id, u, v, n, plane, material);
-      if (patch) {
-        const float3 wall_u = wall_directions[sample];
-        const float3 wall_n = face_normals[sample];
-        const float surface_plane = math::dot(positions[corner_verts[faces[sample].start()]],
-                                              wall_n);
-        const float3 anchor = wall_u * (flat_middle.x - wall_shifts[sample]) +
-                              float3(0, 0, flat_middle.y) + wall_n * surface_plane;
-        for (const int vert : IndexRange(first_vert, data.positions.size() - first_vert)) {
-          const float3 p = data.positions[vert];
-          data.positions[vert] = anchor + wall_u * (p.x - flat_middle.x) +
-                                 float3(0, 0, p.y - flat_middle.y) + wall_n * p.z;
-        }
-      }
+    }
+    if (skip_face) {
+      continue;
     }
     if (patch) {
       for (const int patch_face : patch->faces) {
@@ -1690,6 +1910,8 @@ Mesh *mesh_masonry(const Mesh &mesh, const MeshMasonryParams &params)
   /* The blocks. */
   Mesh *blocks_mesh = bke::mesh_new_no_attributes(
       data.positions.size(), 0, data.face_sizes.size(), data.corner_verts.size());
+  /* The materials of the input, so the material indices of the blocks point at them. */
+  BKE_mesh_copy_parameters_for_eval(blocks_mesh, &mesh);
   blocks_mesh->vert_positions_for_write().copy_from(data.positions);
   {
     MutableSpan<int> offsets = blocks_mesh->face_offsets_for_write();
@@ -1745,7 +1967,7 @@ Mesh *mesh_masonry(const Mesh &mesh, const MeshMasonryParams &params)
     backing = kept ? *kept : BKE_mesh_copy_for_eval(mesh);
   }
   if (backing != nullptr && params.backing) {
-    const float base = -params.offset * params.depth;
+    const float base = layers_start(params);
     if (base != 0.0f) {
       const Span<float3> vert_normals = mesh.vert_normals();
       Array<bool> moved(mesh.verts_num, false);

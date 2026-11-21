@@ -658,6 +658,9 @@ Mesh *distribute_mortar(const Mesh &surface,
           sim_cache_get_value(hasher.finish(), [&]() {
             auto value = std::make_unique<MortarCachedValue>();
             value->mesh = distribute_mortar_compute(surface, params, value->message);
+            if (value->mesh != nullptr) {
+              sim_cache_mesh_prepare(*value->mesh);
+            }
             return value;
           }));
   if (!value) {
@@ -667,7 +670,7 @@ Mesh *distribute_mortar(const Mesh &surface,
   if (value->mesh == nullptr) {
     return nullptr;
   }
-  return BKE_mesh_copy_for_eval(*value->mesh);
+  return sim_cache_mesh_copy(*value->mesh, surface);
 }
 
 }  // namespace blender::geometry

@@ -46,6 +46,7 @@
 
 #include "BLT_translation.hh"
 
+#include "BKE_eval_break.hh"
 #include "BKE_appdir.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_cache.hh"
@@ -190,6 +191,9 @@ void BKE_modifier_free_ex(ModifierData *md, const int flag)
     if (mti->foreach_ID_link) {
       mti->foreach_ID_link(md, nullptr, modifier_free_data_id_us_cb, nullptr);
     }
+    if (md->bake_mesh) {
+      id_us_min(&md->bake_mesh->id);
+    }
   }
 
   if (mti->free_data) {
@@ -293,6 +297,7 @@ void BKE_modifiers_foreach_ID_link(Object *ob, IDWalkFunc walk, void *user_data)
     if (mti->foreach_ID_link) {
       mti->foreach_ID_link(&md, ob, walk, user_data);
     }
+    walk(user_data, ob, reinterpret_cast<ID **>(&md.bake_mesh), IDWALK_CB_USER);
   }
 }
 
@@ -358,6 +363,10 @@ void BKE_modifier_copydata_ex(const ModifierData *md, ModifierData *target, cons
   target->flag = md->flag;
   target->ui_expand_flag = md->ui_expand_flag;
   target->persistent_uid = md->persistent_uid;
+  if (target->bake_mesh && (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
+    id_us_min(&target->bake_mesh->id);
+  }
+  target->bake_mesh = md->bake_mesh;
 
   if (mti->copy_data) {
     mti->copy_data(md, target, flag);
@@ -366,6 +375,9 @@ void BKE_modifier_copydata_ex(const ModifierData *md, ModifierData *target, cons
   if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
     if (mti->foreach_ID_link) {
       mti->foreach_ID_link(target, nullptr, modifier_copy_data_id_us_cb, nullptr);
+    }
+    if (target->bake_mesh) {
+      id_us_plus(&target->bake_mesh->id);
     }
   }
 }
@@ -515,6 +527,15 @@ int BKE_modifiers_get_cage_index(const Scene *scene,
   }
 
   return cageIndex;
+}
+
+bool BKE_modifier_stop_requested(const ModifierEvalContext *ctx)
+{
+  /* Final renders stop through the render's own cancel. */
+  if (ctx == nullptr || (ctx->flag & MOD_APPLY_RENDER)) {
+    return false;
+  }
+  return bke::eval_break::requested_since(ctx->esc_presses);
 }
 
 bool BKE_modifier_is_enabled(const Scene *scene, ModifierData *md, int required_mode)

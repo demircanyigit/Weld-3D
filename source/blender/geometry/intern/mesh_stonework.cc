@@ -1494,6 +1494,9 @@ Mesh *mesh_stonework(const Mesh &mesh,
             auto value = std::make_unique<StoneworkCachedValue>();
             value->mesh = mesh_stonework_compute(
                 mesh, params, &value->stones_num, &value->message);
+            if (value->mesh != nullptr) {
+              sim_cache_mesh_prepare(*value->mesh);
+            }
             return value;
           }));
   if (r_stones_num) {
@@ -1505,8 +1508,7 @@ Mesh *mesh_stonework(const Mesh &mesh,
   if (!value || value->mesh == nullptr) {
     return nullptr;
   }
-  /* The copy shares its arrays with the cached mesh, so it is cheap. */
-  return BKE_mesh_copy_for_eval(*value->mesh);
+  return sim_cache_mesh_copy(*value->mesh, mesh);
 }
 
 }  // namespace blender::geometry

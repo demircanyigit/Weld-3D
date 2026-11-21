@@ -13,6 +13,7 @@
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_main_invariants.hh"
@@ -244,6 +245,120 @@ static ARegion *template_ID_search_menu_item_tooltip(
   return tooltip_create_from_search_item_generic(C, region, item_rect, active_id);
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Per-Row Duplicate/Delete in the Browse List
+ * \{ */
+
+static bool template_ID_item_action_poll(const bContext * /*C*/,
+                                         void *arg_template,
+                                         void *item,
+                                         const SearchItemAction action)
+{
+  const TemplateID *template_ui = static_cast<const TemplateID *>(arg_template);
+  const ID *id = static_cast<const ID *>(item);
+  const ID_Type idcode = GS(id->name);
+
+  /* Types tied to the window and screen setup, or that have their own tools. */
+  if (ELEM(idcode, ID_SCE, ID_WS, ID_SCR, ID_WM, ID_LI)) {
+    return false;
+  }
+
+  switch (action) {
+    case SEARCH_ITEM_ACTION_DUPLICATE: {
+      /* A plain copy of an object would not be in any collection. */
+      if (ELEM(idcode, ID_OB, ID_KE)) {
+        return false;
+      }
+      const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
+      return id_type && (id_type->flags & IDTYPE_FLAGS_NO_COPY) == 0;
+    }
+    case SEARCH_ITEM_ACTION_DELETE: {
+      /* Never delete the data-block that owns the property being browsed. */
+      if (id == template_ui->ptr.owner_id) {
+        return false;
+      }
+      /* Same rules as deleting from the Outliner. */
+      if (id->tag & ID_TAG_INDIRECT) {
+        return false;
+      }
+      if (ID_IS_OVERRIDE_LIBRARY(id)) {
+        if (!ID_IS_OVERRIDE_LIBRARY_REAL(id) ||
+            (id->override_library->flag & LIBOVERRIDE_FLAG_NO_HIERARCHY) == 0)
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+    case SEARCH_ITEM_ACTION_NONE:
+      break;
+  }
+  return false;
+}
+
+static bool template_ID_item_action_exec(bContext *C,
+                                         void *arg_template,
+                                         void *item,
+                                         const SearchItemAction action)
+{
+  if (!template_ID_item_action_poll(C, arg_template, item, action)) {
+    return false;
+  }
+  Main *bmain = CTX_data_main(C);
+  ID *id = static_cast<ID *>(item);
+
+  switch (action) {
+    case SEARCH_ITEM_ACTION_DUPLICATE: {
+      /* Same copy as "Make Single User", including animation actions. */
+      ID *id_new = BKE_id_copy_ex(bmain, id, nullptr, LIB_ID_COPY_DEFAULT | LIB_ID_COPY_ACTIONS);
+      if (id_new == nullptr) {
+        return false;
+      }
+      /* New copies start with one user by convention. Nothing uses this one yet, so keep it
+       * alive with a fake user instead, otherwise it would be lost on save. */
+      id_us_min(id_new);
+      id_fake_user_set(id_new);
+
+      BKE_main_ensure_invariants(*bmain);
+      DEG_relations_tag_update(bmain);
+      WM_event_add_notifier(C, NC_ID | NA_ADDED, nullptr);
+      ED_undo_push(C, CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Duplicate Data-Block"));
+      break;
+    }
+    case SEARCH_ITEM_ACTION_DELETE: {
+      /* Don't free data that edit mode is working on. */
+      if (Object *obedit = CTX_data_edit_object(C)) {
+        if (id == &obedit->id || id == obedit->data) {
+          WM_global_reportf(RPT_WARNING, "Cannot delete '%s' while in Edit Mode", id->name + 2);
+          return false;
+        }
+      }
+      if (ID_REAL_USERS(id) <= 1 && BKE_library_ID_is_indirectly_used(bmain, id)) {
+        WM_global_reportf(RPT_WARNING,
+                          "Cannot delete '%s', indirectly used data needs at least one user",
+                          id->name + 2);
+        return false;
+      }
+      /* Clears every use of the data-block (like Outliner delete), then frees it. Users that
+       * can't be empty (e.g. an object whose mesh is deleted) are deleted with it. */
+      BKE_id_delete(bmain, id);
+
+      DEG_relations_tag_update(bmain);
+      WM_event_add_notifier(C, NC_ID | NA_REMOVED, nullptr);
+      WM_event_add_notifier(C, NC_WINDOW, nullptr);
+      ED_undo_push(C, CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Delete Data-Block"));
+      break;
+    }
+    case SEARCH_ITEM_ACTION_NONE:
+      return false;
+  }
+
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+  return true;
+}
+
+/** \} */
+
 /* ID Search browse menu, open */
 static Block *id_search_menu(bContext *C, ARegion *region, void *arg_litem)
 {
@@ -274,7 +389,9 @@ static Block *id_search_menu(bContext *C, ARegion *region, void *arg_litem)
                                      template_ID_search_menu_item_tooltip,
                                      template_ui.prv_rows,
                                      template_ui.prv_cols,
-                                     template_ui.scale);
+                                     template_ui.scale,
+                                     template_ID_item_action_poll,
+                                     template_ID_item_action_exec);
 }
 
 static Block *id_search_menu_session_uid(bContext *C, ARegion *region, void *arg_litem)
@@ -297,7 +414,9 @@ static Block *id_search_menu_session_uid(bContext *C, ARegion *region, void *arg
                                      template_ID_search_menu_item_tooltip,
                                      template_ui.prv_rows,
                                      template_ui.prv_cols,
-                                     template_ui.scale);
+                                     template_ui.scale,
+                                     template_ID_item_action_poll,
+                                     template_ID_item_action_exec);
 }
 
 static void template_id_cb(bContext *C, void *arg_litem, void *arg_event);

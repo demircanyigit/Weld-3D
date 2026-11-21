@@ -58,6 +58,9 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   StoneworkModifierData *smd = reinterpret_cast<StoneworkModifierData *>(md);
   walk(user_data, ob, reinterpret_cast<ID **>(&smd->collection), IDWALK_CB_USER);
+  StoneworkModifierData *pick_data = reinterpret_cast<StoneworkModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->material_index_pick), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->mortar_material_index_pick), IDWALK_CB_USER);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -118,8 +121,9 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   params.mortar_remesh = geometry::StoneworkRemesh(smd.mortar_remesh);
   params.mortar_resolution = smd.mortar_resolution;
   params.merge = smd.flag & MOD_STONEWORK_MERGE;
-  params.material_index = smd.material_index;
-  params.mortar_material_index = smd.mortar_material_index;
+  params.material_index = MOD_material_slot(*mesh, smd.material_index_pick, smd.material_index);
+  params.mortar_material_index = MOD_material_slot(
+      *mesh, smd.mortar_material_index_pick, smd.mortar_material_index);
   params.stone_id_id = "stone_id";
   params.random_id = "stone_random";
   const bool use_color = smd.flag & MOD_STONEWORK_COLOR;
@@ -153,6 +157,9 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   int count = 0;
   std::string message;
   Mesh *result = geometry::mesh_stonework(*mesh, params, &count, &message);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (!message.empty()) {
     BKE_modifier_set_warning(ctx->object, md, "%s", message.c_str());
   }
@@ -225,10 +232,10 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   more.prop(ptr, "max_stones", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   more.prop(ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   ui::Layout &materials = layout.column(true);
-  materials.prop(ptr, "material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_material_ui(materials, ptr, "material_index_pick", "material_index", std::nullopt);
   ui::Layout &mortar_mat = materials.column(true);
   mortar_mat.active_set(mortar);
-  mortar_mat.prop(ptr, "mortar_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_material_ui(mortar_mat, ptr, "mortar_material_index_pick", "mortar_material_index", std::nullopt);
   layout.prop(ptr, "use_random_color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (smd.flag & MOD_STONEWORK_COLOR) {
     layout.prop(ptr, "color_mode", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);

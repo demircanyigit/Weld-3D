@@ -26,13 +26,13 @@ Material::Material(blender::Object &ob, bool random)
     if (ob.id.lib) {
       hash = (hash * 13) ^ BLI_ghashutil_strhash_p_murmur(ob.id.lib->filepath);
     }
-    /* Strong colors like 3ds Max object colors, saturation and value vary widely so neighbors
-     * with close hues still differ. */
-    float3 hsv = float3(BLI_hash_int_01(hash),
-                        0.60f + 0.40f * BLI_hash_int_01(hash ^ 0x9e3779b9u),
-                        0.50f + 0.40f * BLI_hash_int_01(hash ^ 0x85ebca6bu));
-    hsv_to_rgb_v(hsv, base_color);
-    IMB_colormanagement_rec709_to_scene_linear(base_color, base_color);
+    /* The same colors as the Island color type: picked in display colors, then made linear. */
+    const float3 hsv = float3(BLI_hash_int_01(hash),
+                              0.60f + 0.25f * BLI_hash_int_01(hash ^ 0x9e3779b9u),
+                              1.0f - 0.35f * BLI_hash_int_01(hash ^ 0x85ebca6bu));
+    float3 srgb;
+    hsv_to_rgb_v(hsv, srgb);
+    srgb_to_linearrgb_v3_v3(base_color, srgb);
   }
   else {
     base_color = ob.color;

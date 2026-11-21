@@ -403,6 +403,8 @@ struct ButtonSearch : public Button {
 
   ButtonSearchContextMenuFn item_context_menu_fn = nullptr;
   ButtonSearchTooltipFn item_tooltip_fn = nullptr;
+  ButtonSearchItemActionPollFn item_action_poll_fn = nullptr;
+  ButtonSearchItemActionExecFn item_action_exec_fn = nullptr;
 
   const char *item_sep_string = nullptr;
 
@@ -1057,6 +1059,11 @@ void searchbox_update(bContext *C, ARegion *region, Button *but, bool reset);
 int searchbox_autocomplete(bContext *C, ARegion *region, Button *but, char *str);
 bool searchbox_event(
     bContext *C, ARegion *region, Button *but, ARegion *butregion, const wmEvent *event);
+/**
+ * Handle a left click on the per-row action icons (duplicate/delete).
+ * Returns true when the event hit an icon and must not reach the normal item handling.
+ */
+bool searchbox_item_action_event(bContext *C, ARegion *region, Button *but, const wmEvent *event);
 /**
  * String validated to be of correct length (but->hardmax).
  */

@@ -114,6 +114,7 @@ set(SRC
   intern/editmesh_cache.cc
   intern/editmesh_tangent.cc
   intern/effect.cc
+  intern/eval_break.cc
   intern/fcurve.cc
   intern/fcurve_driver.cc
   intern/file_handler.cc
@@ -394,6 +395,7 @@ set(SRC
   BKE_editmesh_cache.hh
   BKE_editmesh_tangent.hh
   BKE_effect.h
+  BKE_eval_break.hh
   BKE_fcurve.hh
   BKE_fcurve_driver.h
   BKE_file_handler.hh

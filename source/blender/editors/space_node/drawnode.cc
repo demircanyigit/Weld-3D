@@ -1186,7 +1186,11 @@ static void std_node_socket_draw(
       }
       else {
         if (sock->typeinfo->subtype == PROP_DIRECTION) {
-          layout->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
+          /* The ball to turn it by hand, with its numbers under it to type exact values. */
+          ui::Layout *column = &layout->column(false);
+          draw_node_socket_name_editable(&column->row(true), sock, label_or_empty);
+          column->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
+          column->prop(ptr, "default_value", DEFAULT_FLAGS | ui::ITEM_R_EXPAND, "", ICON_NONE);
         }
         else {
           ui::Layout *column = &layout->column(false);

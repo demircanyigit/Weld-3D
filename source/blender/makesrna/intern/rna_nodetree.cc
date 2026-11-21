@@ -1219,7 +1219,7 @@ static const EnumPropertyItem *rna_NodeTree_color_tag_itemf(bContext * /*C*/,
       case bke::NodeColorTag::Distort:
       case bke::NodeColorTag::Filter:
       case bke::NodeColorTag::Matte: {
-        if (ntree.type == NTREE_COMPOSIT) {
+        if (ELEM(ntree.type, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
           RNA_enum_item_add(&items, &items_num, item);
         }
         break;
@@ -4148,6 +4148,60 @@ static PointerRNA rna_NodeMenuSwitch_enum_definition_get(PointerRNA *ptr)
   return *ptr;
 }
 
+/* Texture Graph. A stored size of zero means the default size. */
+
+static int rna_TextureGraphNodeTree_size_get(const bNodeTree *ntree, const int axis)
+{
+  const int size = ntree->texture_graph_size[axis];
+  return size > 0 ? size : TEXTURE_GRAPH_DEFAULT_SIZE;
+}
+
+static int rna_TextureGraphNodeTree_width_get(PointerRNA *ptr)
+{
+  return rna_TextureGraphNodeTree_size_get(ptr->data_as<bNodeTree>(), 0);
+}
+
+static int rna_TextureGraphNodeTree_height_get(PointerRNA *ptr)
+{
+  return rna_TextureGraphNodeTree_size_get(ptr->data_as<bNodeTree>(), 1);
+}
+
+static void rna_TextureGraphNodeTree_width_set(PointerRNA *ptr, const int value)
+{
+  ptr->data_as<bNodeTree>()->texture_graph_size[0] = value;
+}
+
+static void rna_TextureGraphNodeTree_height_set(PointerRNA *ptr, const int value)
+{
+  ptr->data_as<bNodeTree>()->texture_graph_size[1] = value;
+}
+
+static void rna_TextureGraphNodeTree_settings_update(Main *bmain,
+                                                     Scene * /*scene*/,
+                                                     PointerRNA *ptr)
+{
+  bNodeTree *ntree = id_cast<bNodeTree *>(ptr->owner_id);
+  BKE_ntree_update_tag_all(ntree);
+  BKE_main_ensure_invariants(*bmain, ntree->id);
+  WM_main_add_notifier(NC_NODE | NA_EDITED, ntree);
+}
+
+static void rna_TextureGraphNodeTree_update_textures(ID * /*id*/,
+                                                     bNodeTree *ntree,
+                                                     Main *bmain,
+                                                     bContext *C)
+{
+  Scene *scene = CTX_data_scene(C);
+  if (scene == nullptr) {
+    scene = static_cast<Scene *>(bmain->scenes.first);
+  }
+  if (scene == nullptr) {
+    return;
+  }
+  ED_texture_graph_evaluate(bmain, scene, ntree, false);
+  WM_main_add_notifier(NC_IMAGE | NA_EDITED, nullptr);
+}
+
 }  // namespace blender
 
 #else
@@ -4760,6 +4814,23 @@ static void def_float_curve(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_struct_type(prop, "CurveMapping");
   RNA_def_property_ui_text(prop, "Mapping", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+[[maybe_unused]] static void def_tree_graph_branches(BlenderRNA *brna, StructRNA *srna)
+{
+  static const EnumPropertyItem curve_items[] = {
+      {0, "LENGTH", 0, "Length", "Length of the branches by place on the parent"},
+      {1, "ANGLE", 0, "Angle", "Angle to the parent by place on the parent"},
+      {2, "RADIUS", 0, "Radius", "Thickness of the branches by place on the parent"},
+      {3, "DROOP", 0, "Droop", "Droop of the branches by place on the parent"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  def_float_curve(brna, srna);
+  PropertyRNA *prop = RNA_def_property(srna, "curve", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "custom1");
+  RNA_def_property_enum_items(prop, curve_items);
+  RNA_def_property_ui_text(prop, "Curve", "Which curve to edit, each scales a value on the node");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, nullptr);
 }
 
 static void def_time(BlenderRNA * /*brna*/, StructRNA *srna)
@@ -9369,6 +9440,12 @@ static void rna_def_nodetree(BlenderRNA *brna)
       {NTREE_TEXTURE, "TEXTURE", ICON_TEXTURE, "Texture", "Texture nodes"},
       {NTREE_COMPOSIT, "COMPOSITING", ICON_RENDERLAYERS, "Compositing", "Compositing nodes"},
       {NTREE_GEOMETRY, "GEOMETRY", ICON_GEOMETRY_NODES, "Geometry", "Geometry nodes"},
+      {NTREE_TEXTURE_GRAPH,
+       "TEXTURE_GRAPH",
+       ICON_NODE_TEXTURE_GRAPH,
+       "Texture Graph",
+       "Texture Graph nodes"},
+      {NTREE_TREE_GRAPH, "TREE_GRAPH", ICON_NODE_TREE_GRAPH, "Tree Graph", "Tree Graph nodes"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -9550,6 +9627,61 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
   RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
+}
+
+static void rna_def_texture_graph_nodetree(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+  FunctionRNA *func;
+
+  srna = RNA_def_struct(brna, "TextureGraphNodeTree", "NodeTree");
+  RNA_def_struct_ui_text(
+      srna,
+      "Texture Graph",
+      "Node graph that generates texture images, one image for each output of the graph");
+  RNA_def_struct_sdna(srna, "bNodeTree");
+  RNA_def_struct_ui_icon(srna, ICON_NODE_TEXTURE_GRAPH);
+
+  prop = RNA_def_property(srna, "width", PROP_INT, PROP_PIXEL);
+  RNA_def_property_int_funcs(prop,
+                             "rna_TextureGraphNodeTree_width_get",
+                             "rna_TextureGraphNodeTree_width_set",
+                             nullptr);
+  RNA_def_property_range(prop, 4, 16384);
+  RNA_def_property_ui_range(prop, 16, 8192, 256, -1);
+  RNA_def_property_ui_text(prop, "Width", "Width of the images the graph makes");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_TextureGraphNodeTree_settings_update");
+
+  prop = RNA_def_property(srna, "height", PROP_INT, PROP_PIXEL);
+  RNA_def_property_int_funcs(prop,
+                             "rna_TextureGraphNodeTree_height_get",
+                             "rna_TextureGraphNodeTree_height_set",
+                             nullptr);
+  RNA_def_property_range(prop, 4, 16384);
+  RNA_def_property_ui_range(prop, 16, 8192, 256, -1);
+  RNA_def_property_ui_text(prop, "Height", "Height of the images the graph makes");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_TextureGraphNodeTree_settings_update");
+
+  prop = RNA_def_property(srna, "use_auto_update", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(
+      prop, nullptr, "texture_graph_flag", NTREE_TEXTURE_GRAPH_NO_AUTO_UPDATE);
+  RNA_def_property_ui_text(
+      prop, "Auto Update", "Update the images every time the graph changes");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_TextureGraphNodeTree_settings_update");
+
+  func = RNA_def_function(srna, "update_textures", "rna_TextureGraphNodeTree_update_textures");
+  RNA_def_function_ui_description(func, "Compute the graph and write its output images");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT | FUNC_USE_MAIN);
+}
+
+static void rna_def_tree_graph_nodetree(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "TreeGraphNodeTree", "NodeTree");
+  RNA_def_struct_ui_text(
+      srna, "Tree Graph", "Node graph that grows a tree, used by the Tree modifier");
+  RNA_def_struct_sdna(srna, "bNodeTree");
+  RNA_def_struct_ui_icon(srna, ICON_NODE_TREE_GRAPH);
 }
 
 static void rna_def_composite_nodetree(BlenderRNA *brna)
@@ -10001,6 +10133,277 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("CompositorNode", "CompositorNodeViewer", def_cmp_viewer);
   define("CompositorNode", "CompositorNodeZcombine");
 
+  define("NodeInternal", "TreeGraphNodeOutput");
+  define("NodeInternal", "TreeGraphNodeTrunk");
+  define("NodeInternal", "TreeGraphNodeBranches");
+  define("NodeInternal", "TreeGraphNodeLeaves");
+  define("NodeInternal", "TreeGraphNodeRoots");
+  define("NodeInternal", "TreeGraphNodeProfile", def_float_curve);
+  define("NodeInternal", "TreeGraphNodeAvoid");
+  define("NodeInternal", "TreeGraphNodeBranchInfo");
+  define("NodeInternal", "TreeGraphNodeObjectInfo");
+  define("NodeInternal", "TreeGraphNodePrune");
+  define("NodeInternal", "TreeGraphNodeDrawn");
+  define("NodeInternal", "TreeGraphNodeForce");
+  define("NodeInternal", "TreeGraphNodeCrown");
+  define("NodeInternal", "TreeGraphNodeBark");
+  define("NodeInternal", "TreeGraphNodeFronds");
+  define("NodeInternal", "TreeGraphNodeIvy");
+  define("CompositorNode", "TextureGraphNodeChannelShuffle");
+  define("CompositorNode", "TextureGraphNodeDirectionalWarp");
+  define("CompositorNode", "TextureGraphNodeDistance");
+  define("CompositorNode", "TextureGraphNodeEmboss");
+  define("CompositorNode", "TextureGraphNodeFXMap");
+  define("CompositorNode", "TextureGraphNodeHeightToNormal");
+  define("CompositorNode", "TextureGraphNodeLevels");
+  define("CompositorNode", "TextureGraphNodePosition");
+  define("CompositorNode", "TextureGraphNodeRandom");
+  define("CompositorNode", "TextureGraphNodeSample");
+  define("CompositorNode", "TextureGraphNodeSharpen");
+  define("CompositorNode", "TextureGraphNodeSize");
+  define("CompositorNode", "TextureGraphNodeSVG");
+  define("CompositorNode", "TextureGraphNodeText");
+  define("CompositorNode", "TextureGraphNodeTilingNoise");
+  define("CompositorNode", "TextureGraphNodeWarp");
+  define("CompositorNode", "TextureGraphNodeChannelMixer");
+  define("CompositorNode", "TextureGraphNodeChrominanceExtract");
+  define("CompositorNode", "TextureGraphNodeColorToMask");
+  define("CompositorNode", "TextureGraphNodeContrastLuminosity");
+  define("CompositorNode", "TextureGraphNodeGrayscaleConversion");
+  define("CompositorNode", "TextureGraphNodeHDRRangeViewer");
+  define("CompositorNode", "TextureGraphNodeReplaceColor");
+  define("CompositorNode", "TextureGraphNodeReplaceColorRange");
+  define("CompositorNode", "TextureGraphNodeThreshold");
+  define("CompositorNode", "TextureGraphNodeHistogramRange");
+  define("CompositorNode", "TextureGraphNodeHistogramScan");
+  define("CompositorNode", "TextureGraphNodeHistogramScanNonUniform");
+  define("CompositorNode", "TextureGraphNodeHistogramSelect");
+  define("CompositorNode", "TextureGraphNodeHistogramShift");
+  define("CompositorNode", "TextureGraphNodeIDToMask");
+  define("CompositorNode", "TextureGraphNodeQuantizeGrayscale");
+  define("CompositorNode", "TextureGraphNodeQuantizeColorSimple");
+  define("CompositorNode", "TextureGraphNodeAutoLevels");
+  define("CompositorNode", "TextureGraphNodeMinMax");
+  define("CompositorNode", "TextureGraphNodeHistogramCompute");
+  define("CompositorNode", "TextureGraphNodeHistogramEqualize");
+  define("CompositorNode", "TextureGraphNodeHistogramRender");
+  define("CompositorNode", "TextureGraphNodeHighpass");
+  define("CompositorNode", "TextureGraphNodeHeightFrequencies");
+  define("CompositorNode", "TextureGraphNodeLightingCancelHigh");
+  define("CompositorNode", "TextureGraphNodeLightingCancelLow");
+  define("CompositorNode", "TextureGraphNodeLuminanceHighpass");
+  define("CompositorNode", "TextureGraphNodeHaldCLUT");
+  define("CompositorNode", "TextureGraphNodeColorMatch");
+  define("CompositorNode", "TextureGraphNodeQuantizeColor");
+  define("CompositorNode", "TextureGraphNodeApplyPalette");
+  define("CompositorNode", "TextureGraphNodeCreatePalette");
+  define("CompositorNode", "TextureGraphNodeModifyPalette");
+  define("CompositorNode", "TextureGraphNodeViewPalette");
+  define("CompositorNode", "TextureGraphNodeDissolve");
+  define("CompositorNode", "TextureGraphNodeLinearBurn");
+  define("CompositorNode", "TextureGraphNodeAnisotropicBlur");
+  define("CompositorNode", "TextureGraphNodeMedianFilter");
+  define("CompositorNode", "TextureGraphNodeMLVFilter");
+  define("CompositorNode", "TextureGraphNodeNonUniformBlur");
+  define("CompositorNode", "TextureGraphNodeRadialBlur");
+  define("CompositorNode", "TextureGraphNodeSlopeBlur");
+  define("CompositorNode", "TextureGraphNodePerlinNoise");
+  define("CompositorNode", "TextureGraphNodeFractalSumBase");
+  define("CompositorNode", "TextureGraphNodeFractalSum1");
+  define("CompositorNode", "TextureGraphNodeFractalSum2");
+  define("CompositorNode", "TextureGraphNodeFractalSum3");
+  define("CompositorNode", "TextureGraphNodeFractalSum4");
+  define("CompositorNode", "TextureGraphNodeClouds1");
+  define("CompositorNode", "TextureGraphNodeClouds2");
+  define("CompositorNode", "TextureGraphNodeClouds3");
+  define("CompositorNode", "TextureGraphNodePlasma");
+  define("CompositorNode", "TextureGraphNodeCreased");
+  define("CompositorNode", "TextureGraphNodeFluid");
+  define("CompositorNode", "TextureGraphNodeLiquid");
+  define("CompositorNode", "TextureGraphNodeGaussianNoise");
+  define("CompositorNode", "TextureGraphNodeWhiteNoise");
+  define("CompositorNode", "TextureGraphNodeWhiteNoiseFast");
+  define("CompositorNode", "TextureGraphNodeBlueNoiseFast");
+  define("CompositorNode", "TextureGraphNodeAnisotropicNoise");
+  define("CompositorNode", "TextureGraphNodeDirectionalNoise1");
+  define("CompositorNode", "TextureGraphNodeDirectionalNoise2");
+  define("CompositorNode", "TextureGraphNodeDirectionalNoise3");
+  define("CompositorNode", "TextureGraphNodeDirectionalNoise4");
+  define("CompositorNode", "TextureGraphNodeDirectionalScratches");
+  define("CompositorNode", "TextureGraphNodeCells1");
+  define("CompositorNode", "TextureGraphNodeCells2");
+  define("CompositorNode", "TextureGraphNodeCells3");
+  define("CompositorNode", "TextureGraphNodeCells4");
+  define("CompositorNode", "TextureGraphNodeVoronoi");
+  define("CompositorNode", "TextureGraphNodeVoronoiFractal");
+  define("CompositorNode", "TextureGraphNodeCrystal1");
+  define("CompositorNode", "TextureGraphNodeCrystal2");
+  define("CompositorNode", "TextureGraphNodeCaustics");
+  define("CompositorNode", "TextureGraphNodeMicroscopeView");
+  define("CompositorNode", "TextureGraphNodeBnWSpots1");
+  define("CompositorNode", "TextureGraphNodeBnWSpots2");
+  define("CompositorNode", "TextureGraphNodeBnWSpots3");
+  define("CompositorNode", "TextureGraphNodeGaussianSpots1");
+  define("CompositorNode", "TextureGraphNodeGaussianSpots2");
+  define("CompositorNode", "TextureGraphNodeGrungeGalvanicLarge");
+  define("CompositorNode", "TextureGraphNodeGrungeGalvanicSmall");
+  define("CompositorNode", "TextureGraphNodeGrungeLeaks");
+  define("CompositorNode", "TextureGraphNodeGrungeLeakyPaint");
+  define("CompositorNode", "TextureGraphNodeGrungeScratchesFine");
+  define("CompositorNode", "TextureGraphNodeGrungeScratchesRough");
+  define("CompositorNode", "TextureGraphNodeGrungeScratchesDirty");
+  define("CompositorNode", "TextureGraphNodeGrungeShavings");
+  define("CompositorNode", "TextureGraphNodeMessyFibers1");
+  define("CompositorNode", "TextureGraphNodeMessyFibers2");
+  define("CompositorNode", "TextureGraphNodeMessyFibers3");
+  define("CompositorNode", "TextureGraphNodeFur1");
+  define("CompositorNode", "TextureGraphNodeFur2");
+  define("CompositorNode", "TextureGraphNodeFur3");
+  define("CompositorNode", "TextureGraphNodeWaveform1");
+  define("CompositorNode", "TextureGraphNodeDirtGradient");
+  define("CompositorNode", "TextureGraphNodeGrungeConcrete");
+  define("CompositorNode", "TextureGraphNodeGrungeDamas");
+  define("CompositorNode", "TextureGraphNodeGrungeRoughDirty");
+  define("CompositorNode", "TextureGraphNodeGrungeRustFine");
+  define("CompositorNode", "TextureGraphNodeGrungeSpots");
+  define("CompositorNode", "TextureGraphNodeGrungeSpotsDirty");
+  define("CompositorNode", "TextureGraphNodeGrungeSplashesDusty");
+  define("CompositorNode", "TextureGraphNodeMoistureNoise1");
+  define("CompositorNode", "TextureGraphNodeMoistureNoise2");
+  define("CompositorNode", "TextureGraphNodeDirt1");
+  define("CompositorNode", "TextureGraphNodeDirt2");
+  define("CompositorNode", "TextureGraphNodeDirt3");
+  define("CompositorNode", "TextureGraphNodeDirt4");
+  define("CompositorNode", "TextureGraphNodeDirt5");
+  define("CompositorNode", "TextureGraphNodeGrungeMap001");
+  define("CompositorNode", "TextureGraphNodeGrungeMap002");
+  define("CompositorNode", "TextureGraphNodeGrungeMap003");
+  define("CompositorNode", "TextureGraphNodeGrungeMap004");
+  define("CompositorNode", "TextureGraphNodeGrungeMap005");
+  define("CompositorNode", "TextureGraphNodeGrungeMap006");
+  define("CompositorNode", "TextureGraphNodeGrungeMap007");
+  define("CompositorNode", "TextureGraphNodeGrungeMap008");
+  define("CompositorNode", "TextureGraphNodeGrungeMap009");
+  define("CompositorNode", "TextureGraphNodeGrungeMap010");
+  define("CompositorNode", "TextureGraphNodeGrungeMap011");
+  define("CompositorNode", "TextureGraphNodeGrungeMap012");
+  define("CompositorNode", "TextureGraphNodeGrungeMap013");
+  define("CompositorNode", "TextureGraphNodeGrungeMap014");
+  define("CompositorNode", "TextureGraphNodeGrungeMap015");
+  define("CompositorNode", "TextureGraphNodeAlveolus");
+  define("CompositorNode", "TextureGraphNodeBrick1");
+  define("CompositorNode", "TextureGraphNodeBrick2");
+  define("CompositorNode", "TextureGraphNodeBrickGenerator");
+  define("CompositorNode", "TextureGraphNodeChecker1");
+  define("CompositorNode", "TextureGraphNodeFibers1");
+  define("CompositorNode", "TextureGraphNodeFibers2");
+  define("CompositorNode", "TextureGraphNodeGaussian1");
+  define("CompositorNode", "TextureGraphNodeGaussian2");
+  define("CompositorNode", "TextureGraphNodeGradientAxial");
+  define("CompositorNode", "TextureGraphNodeGradientAxialReflected");
+  define("CompositorNode", "TextureGraphNodeGradientCircular");
+  define("CompositorNode", "TextureGraphNodeGradientLinear1");
+  define("CompositorNode", "TextureGraphNodeGradientLinear2");
+  define("CompositorNode", "TextureGraphNodeGradientLinear3");
+  define("CompositorNode", "TextureGraphNodeGradientRadial");
+  define("CompositorNode", "TextureGraphNodeMesh1");
+  define("CompositorNode", "TextureGraphNodeMesh2");
+  define("CompositorNode", "TextureGraphNodePolygon1");
+  define("CompositorNode", "TextureGraphNodePolygon2");
+  define("CompositorNode", "TextureGraphNodeShape");
+  define("CompositorNode", "TextureGraphNodeStar");
+  define("CompositorNode", "TextureGraphNodeStarburst");
+  define("CompositorNode", "TextureGraphNodeStripes");
+  define("CompositorNode", "TextureGraphNodeWeave1");
+  define("CompositorNode", "TextureGraphNodeWeave2");
+  define("CompositorNode", "TextureGraphNodeWeaveGenerator");
+  define("CompositorNode", "TextureGraphNodeTileGenerator");
+  define("CompositorNode", "TextureGraphNodeTileSampler");
+  define("CompositorNode", "TextureGraphNodeTileRandom");
+  define("CompositorNode", "TextureGraphNodeTileRandom2");
+  define("CompositorNode", "TextureGraphNodeSplatter");
+  define("CompositorNode", "TextureGraphNodeSplatterCircular");
+  define("CompositorNode", "TextureGraphNodeArcPavement");
+  define("CompositorNode", "TextureGraphNodeShapeMapper");
+  define("CompositorNode", "TextureGraphNodeScratchesGenerator");
+  define("CompositorNode", "TextureGraphNodeShapeSplatter");
+  define("CompositorNode", "TextureGraphNodeShapeSplatterBlend");
+  define("CompositorNode", "TextureGraphNodeShapeSplatterDataExtract");
+  define("CompositorNode", "TextureGraphNodeShapeSplatterToMask");
+  define("CompositorNode", "TextureGraphNodeHeightExtrude");
+  define("CompositorNode", "TextureGraphNodeShapeExtrude");
+  define("CompositorNode", "TextureGraphNodePanoramaShape");
+  define("CompositorNode", "TextureGraphNodeTriangleGrid");
+  define("CompositorNode", "TextureGraphNodeAmbientOcclusion");
+  define("CompositorNode", "TextureGraphNodeBevel");
+  define("CompositorNode", "TextureGraphNodeCrossSection");
+  define("CompositorNode", "TextureGraphNodeCurvature");
+  define("CompositorNode", "TextureGraphNodeCurvatureSmooth");
+  define("CompositorNode", "TextureGraphNodeCurvatureSobel");
+  define("CompositorNode", "TextureGraphNodeEdgeDetect");
+  define("CompositorNode", "TextureGraphNodeNonUniformEdgeDetect");
+  define("CompositorNode", "TextureGraphNodeBlend");
+  define("CompositorNode", "TextureGraphNodeHeightBlend");
+  define("CompositorNode", "TextureGraphNodeStoneWall");
+  define("CompositorNode", "TextureGraphNodeFittedWall");
+  define("CompositorNode", "TextureGraphNodePackedWall");
+  define("CompositorNode", "TextureGraphNodeDiffusionColor");
+  define("CompositorNode", "TextureGraphNodeDiffusionGrayscale");
+  define("CompositorNode", "TextureGraphNodeDiffusionUV");
+  define("CompositorNode", "TextureGraphNodeEmbossWithGloss");
+  define("CompositorNode", "TextureGraphNodeUberEmboss");
+  define("CompositorNode", "TextureGraphNodeMosaic");
+  define("CompositorNode", "TextureGraphNodeSummedAreaTable");
+  define("CompositorNode", "TextureGraphNodeShadows");
+  define("CompositorNode", "TextureGraphNodeExtendShape");
+  define("CompositorNode", "TextureGraphNodeShapeDropShadow");
+  define("CompositorNode", "TextureGraphNodeShapeGlow");
+  define("CompositorNode", "TextureGraphNodeShapeStroke");
+  define("CompositorNode", "TextureGraphNodeFloodFill");
+  define("CompositorNode", "TextureGraphNodeFloodFillMapper");
+  define("CompositorNode", "TextureGraphNodeFloodFillToBBoxSize");
+  define("CompositorNode", "TextureGraphNodeFloodFillToGradient");
+  define("CompositorNode", "TextureGraphNodeFloodFillToColor");
+  define("CompositorNode", "TextureGraphNodeFloodFillToIndex");
+  define("CompositorNode", "TextureGraphNodeFloodFillToPosition");
+  define("CompositorNode", "TextureGraphNodeFloodFillToRandomColor");
+  define("CompositorNode", "TextureGraphNodeFloodFillToRandomGrayscale");
+  define("CompositorNode", "TextureGraphNodeMultiDirectionalWarp");
+  define("CompositorNode", "TextureGraphNodeNonUniformDirectionalWarp");
+  define("CompositorNode", "TextureGraphNodeSwirl");
+  define("CompositorNode", "TextureGraphNodeVectorMorph");
+  define("CompositorNode", "TextureGraphNodeVectorWarp");
+  define("CompositorNode", "TextureGraphNodeFacingNormal");
+  define("CompositorNode", "TextureGraphNodeHeightNormalBlender");
+  define("CompositorNode", "TextureGraphNodeHeightToNormalWorldUnits");
+  define("CompositorNode", "TextureGraphNodeNormalBlend");
+  define("CompositorNode", "TextureGraphNodeNormalCombine");
+  define("CompositorNode", "TextureGraphNodeNormalInvert");
+  define("CompositorNode", "TextureGraphNodeNormalNormalize");
+  define("CompositorNode", "TextureGraphNodeNormalSobel");
+  define("CompositorNode", "TextureGraphNodeNormalToHeight");
+  define("CompositorNode", "TextureGraphNodeNormalToHeightHQ");
+  define("CompositorNode", "TextureGraphNodeNormalTransform");
+  define("CompositorNode", "TextureGraphNodeNormalVectorRotation");
+  define("CompositorNode", "TextureGraphNodeBentNormal");
+  define("CompositorNode", "TextureGraphNodeNormalUncombine");
+  define("CompositorNode", "TextureGraphNodeCartesianToPolar");
+  define("CompositorNode", "TextureGraphNodePolarToCartesian");
+  define("CompositorNode", "TextureGraphNodeAutoCrop");
+  define("CompositorNode", "TextureGraphNodeClone");
+  define("CompositorNode", "TextureGraphNodeNoiseUpscale1");
+  define("CompositorNode", "TextureGraphNodeNoiseUpscale2");
+  define("CompositorNode", "TextureGraphNodeNoiseUpscale3");
+  define("CompositorNode", "TextureGraphNodeSafeTransform");
+  define("CompositorNode", "TextureGraphNodeNonSquareTransform");
+  define("CompositorNode", "TextureGraphNodeNonUniformRotation");
+  define("CompositorNode", "TextureGraphNodeSkew");
+  define("CompositorNode", "TextureGraphNodeSymmetry");
+  define("CompositorNode", "TextureGraphNodeSymmetrySlice");
+  define("CompositorNode", "TextureGraphNodeTrapezoidTransform");
+  define("CompositorNode", "TextureGraphNodeMakeItTilePatch");
+  define("CompositorNode", "TextureGraphNodeMakeItTilePhoto");
+
   define("TextureNode", "TextureNodeAt");
   define("TextureNode", "TextureNodeBricks", def_tex_bricks);
   define("TextureNode", "TextureNodeChecker");
@@ -10415,6 +10818,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   /* Node group types are currently defined for each tree type individually. */
   define("ShaderNode", "ShaderNodeGroup", def_group);
   define("CompositorNode", "CompositorNodeGroup", def_group);
+  define("CompositorNode", "TextureGraphNodeGroup", def_group);
   define("TextureNode", "TextureNodeGroup", def_group);
   define("GeometryNode", "GeometryNodeGroup", def_group);
 
@@ -10436,6 +10840,8 @@ void RNA_def_nodetree(BlenderRNA *brna)
   rna_def_nodetree(brna);
 
   rna_def_composite_nodetree(brna);
+  rna_def_texture_graph_nodetree(brna);
+  rna_def_tree_graph_nodetree(brna);
   rna_def_shader_nodetree(brna);
   rna_def_texture_nodetree(brna);
   rna_def_geometry_nodetree(brna);

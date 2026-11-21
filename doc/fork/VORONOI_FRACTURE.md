@@ -22,6 +22,15 @@ Add it from **Add Modifier ▸ Generate**. It works on meshes. In the [Modifier 
   - **Object**: The points, vertices, curve points or instances of another object.
 - **Object**: Object whose points are the cell points.
 - **Count**: Number of random points, at most one piece each.
+- **Per**: What Count is for.
+  - **Whole Mesh**: Count points in the bounds of the whole mesh.
+  - **Island**: Every loose part breaks on its own, into about Count pieces, so small parts break
+    as much as big ones and no piece spans two parts.
+  - **Face Set**: Count points under the faces of every face set, so each area breaks into about
+    Count pieces whatever its size. The mesh needs face sets.
+- **By Size**: With Island or Face Set. Count is for the biggest part, and smaller parts break into
+  fewer pieces by their volume (islands) or area (face sets), so the pieces are about the same
+  size everywhere. A part too small for two pieces stays whole.
 - **Seed**: Changes where the random points are.
 - **Cut Gap**: Distance between the inside faces of neighboring pieces.
 - **Separate Islands**: Make a separate piece of every part of a cell that isn't connected to the rest.
@@ -32,6 +41,8 @@ Add it from **Add Modifier ▸ Generate**. It works on meshes. In the [Modifier 
 
 - The mesh should be closed. Open parts are cut too, but their pieces aren't solid.
 - **Cut Gap** shrinks every piece a little, so the pieces don't touch.
+- On meshes with face sets, the cut faces take the face set that covers most of the outside of
+  their piece, so no new face sets are added.
 - For pieces of a material (stone, glass, wood), see [Shatter](SHATTER.md).
 
 ## As a node

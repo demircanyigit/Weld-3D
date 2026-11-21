@@ -8,6 +8,9 @@
 
 #include <algorithm>
 
+#include "BLI_disjoint_set.hh"
+#include "BLI_hash.h"
+#include "BLI_map.hh"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
@@ -221,30 +224,142 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     }
   }
 
-  BM_mesh_bevel(bm,
-                value,
-                offset_type,
-                profile_type,
-                bmd->res,
-                bmd->profile,
-                bmd->affect_type,
-                bmd->lim_flags & MOD_BEVEL_WEIGHT,
-                do_clamp,
-                dvert,
-                vgroup,
-                mat,
-                loop_slide,
-                mark_seam,
-                mark_sharp,
-                harden_normals,
-                face_strength_mode,
-                miter_outer,
-                miter_inner,
-                spread,
-                bmd->custom_profile,
-                bmd->vmesh_method,
-                bweight_offset_vert,
-                bweight_offset_edge);
+  /* Random Width: the weights times a random factor, in a layer of their own. */
+  const bool affect_vertices = bmd->affect_type == MOD_BEVEL_AFFECT_VERTICES;
+  bool use_weights = bmd->lim_flags & MOD_BEVEL_WEIGHT;
+  int weight_offset_vert = bweight_offset_vert;
+  int weight_offset_edge = bweight_offset_edge;
+  const MDeformVert *bevel_dvert = dvert;
+  int bevel_vgroup = vgroup;
+  const char *random_layer = "__bevel_random_width";
+  CustomData *random_data = affect_vertices ? &bm->vdata : &bm->edata;
+  if (bmd->random_width > 0.0f) {
+    BM_data_layer_add_named(bm, random_data, CD_PROP_FLOAT, random_layer);
+    /* Adding a layer can move the others. */
+    const int old_vert = CustomData_get_offset_named(&bm->vdata, CD_PROP_FLOAT, vert_weight_name);
+    const int old_edge = CustomData_get_offset_named(&bm->edata, CD_PROP_FLOAT, edge_weight_name);
+    const int random_offset = CustomData_get_offset_named(
+        random_data, CD_PROP_FLOAT, random_layer);
+    const uint32_t seed = BLI_hash_int_2d(uint32_t(bmd->seed), 4271u);
+    int index = 0;
+    if (affect_vertices) {
+      BM_ITER_MESH_INDEX (v, &iter, bm, BM_VERTS_OF_MESH, index) {
+        float w = 1.0f;
+        if (dvert != nullptr && vgroup != -1) {
+          w = BKE_defvert_find_weight(&dvert[index], vgroup);
+        }
+        else if (use_weights) {
+          w = old_vert == -1 ? 0.0f : BM_ELEM_CD_GET_FLOAT(v, old_vert);
+        }
+        const float r = BLI_hash_int_01(BLI_hash_int_2d(seed, uint32_t(index)));
+        BM_ELEM_CD_SET_FLOAT(v, random_offset, w * (1.0f - bmd->random_width * r));
+      }
+      weight_offset_vert = random_offset;
+      /* The vertex group is in the new weights now. */
+      bevel_dvert = nullptr;
+      bevel_vgroup = -1;
+    }
+    else {
+      BM_ITER_MESH_INDEX (e, &iter, bm, BM_EDGES_OF_MESH, index) {
+        float w = 1.0f;
+        if (use_weights) {
+          w = old_edge == -1 ? 0.0f : BM_ELEM_CD_GET_FLOAT(e, old_edge);
+        }
+        const float r = BLI_hash_int_01(BLI_hash_int_2d(seed, uint32_t(index)));
+        BM_ELEM_CD_SET_FLOAT(e, random_offset, w * (1.0f - bmd->random_width * r));
+      }
+      weight_offset_edge = random_offset;
+      weight_offset_vert = old_vert;
+    }
+    if (affect_vertices) {
+      weight_offset_edge = old_edge;
+    }
+    use_weights = true;
+  }
+
+  auto bevel = [&](const int segments) {
+    BM_mesh_bevel(bm,
+                  value,
+                  offset_type,
+                  profile_type,
+                  segments,
+                  bmd->profile,
+                  bmd->affect_type,
+                  use_weights,
+                  do_clamp,
+                  bevel_dvert,
+                  bevel_vgroup,
+                  mat,
+                  loop_slide,
+                  mark_seam,
+                  mark_sharp,
+                  harden_normals,
+                  face_strength_mode,
+                  miter_outer,
+                  miter_inner,
+                  spread,
+                  bmd->custom_profile,
+                  bmd->vmesh_method,
+                  weight_offset_vert,
+                  weight_offset_edge);
+  };
+
+  if (bmd->random_segments > 0) {
+    /* Random Segments: every loose part is bevelled on its own, with its own segments. */
+    BM_mesh_elem_index_ensure(bm, BM_VERT);
+    DisjointSet<int> sets(bm->totvert);
+    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+      sets.join(BM_elem_index_get(e->v1), BM_elem_index_get(e->v2));
+    }
+    Array<int> island_of_root(bm->totvert, -1);
+    int islands_num = 0;
+    const uint32_t seed = BLI_hash_int_2d(uint32_t(bmd->seed), 7717u);
+    Map<int, Vector<BMVert *>> verts_of_segments;
+    Map<int, Vector<BMEdge *>> edges_of_segments;
+    auto segments_of = [&](BMVert *vert) {
+      const int root = sets.find_root(BM_elem_index_get(vert));
+      if (island_of_root[root] == -1) {
+        island_of_root[root] = islands_num++;
+      }
+      const float r = BLI_hash_int_01(BLI_hash_int_2d(seed, uint32_t(island_of_root[root])));
+      return bmd->res + std::min(int(r * float(bmd->random_segments + 1)), bmd->random_segments);
+    };
+    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+      const int segments = segments_of(v);
+      if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
+        verts_of_segments.lookup_or_add_default(segments).append(v);
+      }
+    }
+    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+      if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
+        edges_of_segments.lookup_or_add_default(segments_of(e->v1)).append(e);
+      }
+    }
+    Vector<int> all_segments;
+    for (const int segments : verts_of_segments.keys()) {
+      all_segments.append(segments);
+    }
+    std::sort(all_segments.begin(), all_segments.end());
+    for (const int segments : all_segments) {
+      BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_TAG, false);
+      for (BMVert *vert : verts_of_segments.lookup(segments)) {
+        BM_elem_flag_enable(vert, BM_ELEM_TAG);
+      }
+      if (const Vector<BMEdge *> *edges = edges_of_segments.lookup_ptr(segments)) {
+        for (BMEdge *edge : *edges) {
+          BM_elem_flag_enable(edge, BM_ELEM_TAG);
+        }
+      }
+      bevel(segments);
+    }
+  }
+  else {
+    bevel(bmd->res);
+  }
+
+  if (bmd->random_width > 0.0f) {
+    BM_data_layer_free_named(bm, random_data, random_layer);
+  }
 
   result = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, mesh);
 
@@ -412,6 +527,16 @@ static void shading_panel_draw(const bContext * /*C*/, Panel *panel)
   layout.prop(ptr, "face_strength_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
+static void random_panel_draw(const bContext * /*C*/, Panel *panel)
+{
+  ui::Layout &layout = *panel->layout;
+  PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
+  layout.use_property_split_set(true);
+  layout.prop(ptr, "random_width", ui::ITEM_R_SLIDER, IFACE_("Width"), ICON_NONE);
+  layout.prop(ptr, "random_segments", UI_ITEM_NONE, IFACE_("Segments"), ICON_NONE);
+  layout.prop(ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+}
+
 static void panel_register(ARegionType *region_type)
 {
   PanelType *panel_type = modifier_panel_register(region_type, eModifierType_Bevel, panel_draw);
@@ -421,6 +546,8 @@ static void panel_register(ARegionType *region_type)
       region_type, "geometry", "Geometry", nullptr, geometry_panel_draw, panel_type);
   modifier_subpanel_register(
       region_type, "shading", "Shading", nullptr, shading_panel_draw, panel_type);
+  modifier_subpanel_register(
+      region_type, "random", "Random", nullptr, random_panel_draw, panel_type);
 }
 
 static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const ModifierData *md)

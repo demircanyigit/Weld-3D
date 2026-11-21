@@ -221,6 +221,18 @@ void view2d_dot_grid_draw(const View2D *v2d,
                           int grid_color_id,
                           float min_step,
                           int grid_subdivisions);
+/**
+ * Draw a grid of lines with subdivisions, every fifth line stronger than the ones between.
+ * Lines fade in as they get far enough apart on screen, so zooming never makes them pop.
+ *
+ * \param grid_color_id: The theme color of the lines.
+ * \param min_step: The finest spacing of the grid, in view space.
+ * \param grid_subdivisions: 0 draws nothing, 1 to 3 show finer and finer lines.
+ */
+void view2d_line_grid_draw(const View2D *v2d,
+                           int grid_color_id,
+                           float min_step,
+                           int grid_subdivisions);
 
 /**
  * Draw horizontal lines.

@@ -61,6 +61,7 @@
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
+#include "RNA_prototypes.hh"
 #include "RNA_enum_types.hh"
 
 #ifdef WITH_PYTHON
@@ -1909,6 +1910,50 @@ static PredefinedExtraOpIconType ui_but_icon_extra_get(Button *but)
   return PREDEFINED_EXTRA_OP_ICON_NONE;
 }
 
+static void ui_but_extra_operator_icon_add_once(Button *but,
+                                                wmOperatorType *optype,
+                                                const BIFIconID icon)
+{
+  for (ButtonExtraOpIcon &op_icon : but->extra_op_icons) {
+    if ((op_icon.optype_params->optype == optype) && (op_icon.icon == icon)) {
+      /* Don't add the same operator icon twice (happens if button is kept alive while active). */
+      return;
+    }
+  }
+  ui_but_extra_operator_icon_add_ptr(but, optype, wm::OpCallContext::InvokeDefault, icon);
+}
+
+/**
+ * Weld 3D: a filled object field of a modifier, constraint or effect gets a "Frame Target" icon.
+ * Other object fields (scene camera, parent, ...) are left alone.
+ */
+static bool ui_but_icon_extra_is_visible_frame_target(Button *but)
+{
+  if (but->type != ButtonType::SearchMenu || but->rnaprop == nullptr) {
+    return false;
+  }
+  if (but->editstr != nullptr || but->drawstr[0] == '\0') {
+    return false;
+  }
+  if (RNA_property_type(but->rnaprop) != PROP_POINTER) {
+    return false;
+  }
+  if (but->rnapoin.type == nullptr || but->rnapoin.data == nullptr) {
+    return false;
+  }
+  const StructRNA *type = RNA_property_pointer_type(&but->rnapoin, but->rnaprop);
+  if (RNA_type_to_ID_code(type) != ID_OB) {
+    return false;
+  }
+  if (!(RNA_struct_is_a(but->rnapoin.type, RNA_Modifier) ||
+        RNA_struct_is_a(but->rnapoin.type, RNA_Constraint) ||
+        RNA_struct_is_a(but->rnapoin.type, RNA_ShaderFx)))
+  {
+    return false;
+  }
+  return RNA_property_pointer_get(&but->rnapoin, but->rnaprop).data != nullptr;
+}
+
 /**
  * While some extra operator icons have to be set explicitly upon button creating, this code adds
  * some generic ones based on button data. Currently these are mutually exclusive, so there's only
@@ -1961,14 +2006,18 @@ static void ui_but_predefined_extra_operator_icons_add(Button *but)
   }
 
   if (optype) {
-    for (ButtonExtraOpIcon &op_icon : but->extra_op_icons) {
-      if ((op_icon.optype_params->optype == optype) && (op_icon.icon == icon)) {
-        /* Don't add the same operator icon twice (happens if button is kept alive while active).
-         */
-        return;
-      }
+    ui_but_extra_operator_icon_add_once(but, optype, icon);
+  }
+
+  /* Weld 3D: "Frame Target" next to the clear icon in object fields of modifiers etc. */
+  if (ui_but_icon_extra_is_visible_frame_target(but)) {
+    static wmOperatorType *frame_target_ot = nullptr;
+    if (!frame_target_ot) {
+      frame_target_ot = WM_operatortype_find("UI_OT_frame_target", false);
     }
-    ui_but_extra_operator_icon_add_ptr(but, optype, wm::OpCallContext::InvokeDefault, icon);
+    if (frame_target_ot) {
+      ui_but_extra_operator_icon_add_once(but, frame_target_ot, ICON_FRAME_TARGET);
+    }
   }
 }
 
@@ -6549,6 +6598,17 @@ void button_func_search_set_tooltip(Button *but, ButtonSearchTooltipFn tooltip_f
   BLI_assert(but->type == ButtonType::SearchMenu);
 
   but_search->item_tooltip_fn = tooltip_fn;
+}
+
+void button_func_search_set_item_actions(Button *but,
+                                         ButtonSearchItemActionPollFn poll_fn,
+                                         ButtonSearchItemActionExecFn exec_fn)
+{
+  ButtonSearch *but_search = static_cast<ButtonSearch *>(but);
+  BLI_assert(but->type == ButtonType::SearchMenu);
+
+  but_search->item_action_poll_fn = poll_fn;
+  but_search->item_action_exec_fn = exec_fn;
 }
 
 void button_func_search_set_listen(Button *but, ButtonSearchListenFn listen_fn)

@@ -1926,6 +1926,7 @@ class VIEW3D_MT_select_edit_mesh(Menu):
         layout.separator()
         layout.operator("mesh.select_mirror", icon='OP_SELECT_MIRROR')
         layout.operator("mesh.select_random", text="Select Random", icon='OP_SELECT_RANDOM')
+        layout.operator("mesh.select_random_islands", text="Select Random Islands", icon='OP_SELECT_RANDOM_ISLANDS')
         layout.operator("mesh.select_nth", icon='OP_CHECKER_DESELECT')
 
         # more/less
@@ -2424,6 +2425,10 @@ class VIEW3D_MT_mesh_add(Menu):
         layout.operator("mesh.primitive_grid_add", text="Grid", icon='MESH_GRID')
         layout.operator("mesh.primitive_monkey_add", text="Monkey", icon='MESH_MONKEY')
 
+        layout.separator()
+
+        layout.operator("object.wrap_add", text="Wrap", icon='MOD_WRAP')
+
         layout.template_node_operator_asset_menu_items(catalog_path="Add")
 
 
@@ -2499,6 +2504,30 @@ class VIEW3D_MT_edit_metaball_context_menu(Menu):
         # Remove
         layout.operator_context = 'EXEC_REGION_WIN'
         layout.operator("mball.delete_metaelems", text="Delete")
+
+
+class VIEW3D_MT_tree_add(Menu):
+    bl_idname = "VIEW3D_MT_tree_add"
+    bl_label = "Tree"
+    bl_translation_context = i18n_contexts.operator_default
+    bl_options = {'SEARCH_ON_KEY_PRESS'}
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator_context = 'EXEC_REGION_WIN'
+        groups = (
+            ("Broadleaf", (('OAK', "Oak"), ('BROADLEAF', "Ash"), ('DEAD', "Bare Tree"))),
+            ("Conifers", (('PINE', "Pine"),)),
+            ("Shrubs", (('BUSH', "Bush"),)),
+        )
+        for i, (heading, trees) in enumerate(groups):
+            if i:
+                layout.separator(type='LINE')
+            layout.label(text=heading)
+            for preset, text in trees:
+                layout.operator("object.tree_add", text=text, icon='TREE_' + preset).preset = preset
+        layout.separator(type='LINE')
+        layout.operator("object.tree_add", text="Empty Graph", icon='NODE_TREE_GRAPH').preset = 'EMPTY'
 
 
 class VIEW3D_MT_metaball_add(Menu):
@@ -2689,6 +2718,7 @@ class VIEW3D_MT_add(Menu):
         layout.menu("VIEW3D_MT_surface_add", icon='OUTLINER_OB_SURFACE')
         layout.menu("VIEW3D_MT_metaball_add", text="Metaball", icon='OUTLINER_OB_META')
         layout.operator("object.text_add", text="Text", icon='OUTLINER_OB_FONT')
+        layout.menu("VIEW3D_MT_tree_add", text="Tree", icon='TREE_ADD')
         layout.operator("object.pointcloud_random_add", text="Point Cloud", icon='OUTLINER_OB_POINTCLOUD')
         layout.menu("VIEW3D_MT_volume_add", text="Volume", text_ctxt=i18n_contexts.id_id, icon='OUTLINER_OB_VOLUME')
         layout.menu("VIEW3D_MT_grease_pencil_add", text="Grease Pencil", icon='OUTLINER_OB_GREASEPENCIL')
@@ -2825,6 +2855,8 @@ class VIEW3D_MT_object(Menu):
         layout.menu("VIEW3D_MT_object_liboverride", icon='LIBRARY_DATA_OVERRIDE')
         layout.menu("VIEW3D_MT_object_relations")
         layout.menu("VIEW3D_MT_object_parent", icon='OP_PARENT_SET')
+        layout.operator_menu_enum("object.group", "pivot", text="Group", icon='OBJECT_GROUP')
+        layout.operator("object.ungroup", icon='OBJECT_UNGROUP')
         layout.menu("VIEW3D_MT_object_modifiers", icon='MODIFIER')
         layout.menu("VIEW3D_MT_object_constraints", icon='CONSTRAINT')
         layout.menu("VIEW3D_MT_object_track", icon='OP_TRACK_TO')
@@ -9402,6 +9434,7 @@ classes = (
     VIEW3D_MT_surface_add,
     VIEW3D_MT_edit_metaball_context_menu,
     VIEW3D_MT_metaball_add,
+    VIEW3D_MT_tree_add,
     TOPBAR_MT_edit_curve_add,
     TOPBAR_MT_edit_armature_add,
     VIEW3D_MT_armature_add,

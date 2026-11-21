@@ -10,6 +10,8 @@
 
 #include <string>
 
+#include <algorithm>
+
 #include "BLI_array.hh"
 #include "BLI_utildefines.h"
 
@@ -23,6 +25,7 @@
 
 #include "BKE_deform.hh"
 #include "BKE_mesh.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
 #include "UI_interface_layout.hh"
@@ -58,9 +61,10 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
   }
 }
 
-static int valid_material(const int material, const Object *object)
+static int valid_material(const int material, const Object *object, const Mesh &mesh)
 {
-  return material >= 0 && material < std::max<int>(object->totcol, 1) ? material : -1;
+  return material >= 0 && material < std::max<int>({object->totcol, mesh.totcol, 1}) ? material :
+                                                                                         -1;
 }
 
 static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
@@ -104,10 +108,14 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   params.tilt = data.tilt;
   params.missing = data.missing;
   params.seed = data.seed;
-  params.roof_material = valid_material(data.roof_material, ctx->object);
-  params.covering_material = valid_material(data.covering_material, ctx->object);
-  params.trim_material = valid_material(data.trim_material, ctx->object);
-  params.wall_material = valid_material(data.wall_material, ctx->object);
+  params.roof_material = valid_material(
+      MOD_material_slot(*mesh, data.roof_material_pick, data.roof_material), ctx->object, *mesh);
+  params.covering_material = valid_material(
+      MOD_material_slot(*mesh, data.covering_material_pick, data.covering_material), ctx->object, *mesh);
+  params.trim_material = valid_material(
+      MOD_material_slot(*mesh, data.trim_material_pick, data.trim_material), ctx->object, *mesh);
+  params.wall_material = valid_material(
+      MOD_material_slot(*mesh, data.wall_material_pick, data.wall_material), ctx->object, *mesh);
   params.part_id = "roof_part";
   params.random_id = "roof_random";
 
@@ -140,6 +148,9 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
 
   std::string message;
   Mesh *result = geometry::mesh_roof(*mesh, params, message);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (!message.empty()) {
     BKE_modifier_set_warning(ctx->object, md, "%s", message.c_str());
   }
@@ -273,10 +284,10 @@ static void materials_panel_draw(const bContext * /*C*/, Panel *panel)
   layout.use_property_split_set(true);
 
   ui::Layout &col = layout.column(true);
-  col.prop(ptr, "roof_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(ptr, "covering_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(ptr, "trim_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(ptr, "wall_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_material_ui(col, ptr, "roof_material_index_pick", "roof_material_index", std::nullopt);
+  modifier_material_ui(col, ptr, "covering_material_index_pick", "covering_material_index", std::nullopt);
+  modifier_material_ui(col, ptr, "trim_material_index_pick", "trim_material_index", std::nullopt);
+  modifier_material_ui(col, ptr, "wall_material_index_pick", "wall_material_index", std::nullopt);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -292,7 +303,23 @@ static void panel_register(ARegionType *region_type)
 /* Taken from the cache when nothing it depends on changed, see #MOD_cached_modify_mesh. */
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
+  const auto &data = *reinterpret_cast<RoofModifierData *>(md);
+  for (Material *material :
+       {data.roof_material_pick, data.covering_material_pick, data.trim_material_pick,
+        data.wall_material_pick})
+  {
+    MOD_material_slot(*mesh, material, 0);
+  }
   return MOD_cached_modify_mesh(md, ctx, mesh, modify_mesh_compute);
+}
+
+static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
+{
+  RoofModifierData *pick_data = reinterpret_cast<RoofModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->roof_material_pick), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->covering_material_pick), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->trim_material_pick), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->wall_material_pick), IDWALK_CB_USER);
 }
 
 ModifierTypeInfo modifierType_Roof = {
@@ -321,7 +348,7 @@ ModifierTypeInfo modifierType_Roof = {
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ nullptr,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,

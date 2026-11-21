@@ -53,6 +53,8 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   ShatterModifierData *smd = reinterpret_cast<ShatterModifierData *>(md);
   walk(user_data, ob, reinterpret_cast<ID **>(&smd->impact), IDWALK_CB_NOP);
+  ShatterModifierData *pick_data = reinterpret_cast<ShatterModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->interior_material_pick), IDWALK_CB_USER);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -72,6 +74,11 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   }
 
   const bool use_interior_material = smd.flag & MOD_SHATTER_INTERIOR_MATERIAL;
+  const int interior_material = use_interior_material ?
+                                    MOD_material_slot(*mesh,
+                                                      smd.interior_material_pick,
+                                                      smd.interior_material) :
+                                    0;
   geometry::MeshShatterParams params;
   params.material = geometry::ShatterMaterial(smd.material);
   params.pieces = smd.pieces;
@@ -92,6 +99,9 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
 
   const char *error = nullptr;
   Mesh *result = geometry::mesh_shatter(*mesh, params, &error);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (result == nullptr) {
     if (error != nullptr) {
       BKE_modifier_set_error(ctx->object, md, "%s", error);
@@ -109,7 +119,7 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
       if (material_index) {
         for (const int face : interior.index_range()) {
           if (interior[face]) {
-            material_index.span[face] = smd.interior_material;
+            material_index.span[face] = interior_material;
           }
         }
         material_index.finish();
@@ -156,7 +166,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   row.prop(ptr, "use_interior_material", UI_ITEM_NONE, "", ICON_NONE);
   ui::Layout &sub = row.row(true);
   sub.active_set(RNA_boolean_get(ptr, "use_interior_material"));
-  sub.prop(ptr, "interior_material", UI_ITEM_NONE, "", ICON_NONE);
+  modifier_material_ui(sub, ptr, "interior_material_pick", "interior_material", "");
 
   modifier_error_message_draw(layout, ptr);
 }
@@ -170,6 +180,9 @@ static void panel_register(ARegionType *region_type)
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   const ShatterModifierData &smd = *reinterpret_cast<ShatterModifierData *>(md);
+  if (smd.flag & MOD_SHATTER_INTERIOR_MATERIAL) {
+    MOD_material_slot(*mesh, smd.interior_material_pick, 0);
+  }
   return MOD_cached_modify_mesh(
       md, ctx, mesh, modify_mesh_compute, [&](geometry::SimCacheHasher &hasher) {
         if (smd.impact != nullptr) {

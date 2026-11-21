@@ -185,7 +185,15 @@ struct ModifierEvalContext {
   Depsgraph *depsgraph;
   Object *object;
   ModifierApplyFlag flag;
+  /** Esc presses counted when the modifier started, see #BKE_modifier_stop_requested. */
+  uint64_t esc_presses = 0;
 };
+
+/**
+ * Whether Esc was pressed since the modifier started. Long modifiers check this now and then and,
+ * when true, return their input unchanged. The modifier stack then turns them off.
+ */
+bool BKE_modifier_stop_requested(const ModifierEvalContext *ctx);
 
 struct ModifierTypeInfo {
   /**

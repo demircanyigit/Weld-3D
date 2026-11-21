@@ -11,6 +11,7 @@
  */
 
 #include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
 
 namespace blender {
 struct Mesh;
@@ -37,5 +38,14 @@ struct RadialArrayParams {
 
 /** Returns a new mesh, or null when \a mesh is empty. */
 Mesh *radial_array(const Mesh &mesh, const RadialArrayParams &params);
+
+/**
+ * Like the one above, but copy i is made of `meshes[picks[i]]`, or of  mesh where
+ * `picks[i]` is -1.  picks has one item per copy. Returns null when there is nothing to copy.
+ */
+Mesh *radial_array(const Mesh &mesh,
+                   Span<const Mesh *> meshes,
+                   Span<int> picks,
+                   const RadialArrayParams &params);
 
 }  // namespace blender::geometry

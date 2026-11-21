@@ -66,6 +66,14 @@ struct MeshMasonryParams {
   float mortar = 0.01f;
   /** 0: the blocks stand on the face. 1: their tops are at the face, so they sink in. */
   float offset = 0.0f;
+  /** Layers of blocks through the thickness. Every other layer is shifted half a block along the
+   * rows, so the joints don't line up. */
+  int layers = 1;
+  /** Space between the layers. */
+  float layer_gap = 0.01f;
+  /** The layers are centered on the face, and each block's depth grows from its middle.
+   * #offset is not used then. */
+  bool centered = false;
   /** Keep the faces under the blocks, as the mortar. */
   bool backing = true;
   /** Turn of the whole layout around the face normal, in radians. */
@@ -89,6 +97,16 @@ struct MeshMasonryParams {
   /** Unfold connected vertical walls and place rigid blocks across their internal edges. */
   bool continuous_walls = false;
   int seed = 0;
+  /** Removing blocks: 0 none, 1 by noise, 2 by a gradient, 3 by both. */
+  int damage = 0;
+  /** Share of the blocks removed, 0 to 1. */
+  float damage_amount = 0.3f;
+  /** Size of the noise. */
+  float damage_size = 1.0f;
+  /** With both, how much the noise breaks up the gradient. */
+  float damage_mix = 0.5f;
+  /** Where the gradient removes the most: +X, -X, +Y, -Y, +Z, -Z. */
+  int damage_direction = 4;
   /** Center of Fan and Radial, in mesh space. The middle of the mesh when unset. */
   std::optional<float3> center;
   /** Custom pattern: block outlines and the size of the repeat. */

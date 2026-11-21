@@ -78,7 +78,9 @@ Block *template_common_search_menu(const bContext *C,
                                    ButtonSearchTooltipFn item_tooltip_fn,
                                    const int preview_rows,
                                    const int preview_cols,
-                                   float scale);
+                                   float scale,
+                                   ButtonSearchItemActionPollFn item_action_poll_fn = nullptr,
+                                   ButtonSearchItemActionExecFn item_action_exec_fn = nullptr);
 
 }  // namespace ui
 }  // namespace blender

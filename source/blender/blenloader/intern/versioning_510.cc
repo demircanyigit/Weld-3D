@@ -1011,6 +1011,30 @@ void blo_do_versions_510(FileData *fd, Library * /*lib*/, Main *bmain)
     }
   }
 
+  /* The Library region of the node editors, left of the toolbar, missing from files of official
+   * builds and of earlier builds of this one. */
+  for (bScreen &screen : bmain->screens) {
+    for (ScrArea &area : screen.areabase) {
+      for (SpaceLink &sl : area.spacedata) {
+        if (sl.spacetype != SPACE_NODE) {
+          continue;
+        }
+        ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
+                                                                         &sl.regionbase;
+        ARegion *library = do_versions_add_region_if_not_found(
+            regionbase, RGN_TYPE_CHANNELS, "library for node editor", RGN_TYPE_UI);
+        if (library) {
+          library->alignment = RGN_ALIGN_LEFT;
+        }
+        ARegion *library_nodes = do_versions_add_region_if_not_found(
+            regionbase, RGN_TYPE_NAV_BAR, "library nodes for node editor", RGN_TYPE_CHANNELS);
+        if (library_nodes) {
+          library_nodes->alignment = RGN_ALIGN_LEFT | RGN_ALIGN_HIDE_WITH_PREV;
+        }
+      }
+    }
+  }
+
   /* Outline and edge line settings of Solid shading, missing from files of official builds. */
   if (!DNA_struct_member_exists(fd->filesdna, "View3DShading", "float", "outline_width")) {
     const View3DShading defaults{};
@@ -1047,6 +1071,17 @@ void blo_do_versions_510(FileData *fd, Library * /*lib*/, Main *bmain)
           smd.resample_count = defaults.resample_count;
           smd.resample_length = defaults.resample_length;
           smd.smooth_factor = defaults.smooth_factor;
+        }
+      }
+    }
+  }
+
+  /* Strength of the Noise modifier, missing from older files where it was always one. */
+  if (!DNA_struct_member_exists(fd->filesdna, "NoiseModifierData", "float", "strength_factor")) {
+    for (Object &ob : bmain->objects) {
+      for (ModifierData &md : ob.modifiers) {
+        if (md.type == eModifierType_Noise) {
+          reinterpret_cast<NoiseModifierData &>(md).strength_factor = 1.0f;
         }
       }
     }

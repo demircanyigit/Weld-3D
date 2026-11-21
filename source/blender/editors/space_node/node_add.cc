@@ -36,6 +36,7 @@
 #include "BKE_node_tree_update.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_screen.hh"
 #include "BKE_texture.h"
 
 #include "IMB_colormanagement.hh"
@@ -931,6 +932,7 @@ static wmOperatorStatus node_add_image_exec(bContext *C, wmOperator *op)
       type = TEX_NODE_IMAGE;
       break;
     case NTREE_COMPOSIT:
+    case NTREE_TEXTURE_GRAPH:
       type = CMP_NODE_IMAGE;
       break;
     case NTREE_GEOMETRY:
@@ -1212,6 +1214,81 @@ void NODE_OT_add_material(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 
   WM_operator_properties_id_lookup(ot, true);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Library Node Operator
+ *
+ * Adds a node from the Library: where a tile is dropped on the graph, or in the middle of the
+ * view when a tile is clicked.
+ * \{ */
+
+static wmOperatorStatus node_add_library_node_exec(bContext *C, wmOperator *op)
+{
+  SpaceNode *snode = CTX_wm_space_node(C);
+  const std::string idname = RNA_string_get(op->ptr, "type");
+  bke::bNodeType *type = bke::node_type_find(idname);
+  if (type == nullptr) {
+    BKE_reportf(op->reports, RPT_ERROR, "Unknown node type \"%s\"", idname.c_str());
+    return OPERATOR_CANCELLED;
+  }
+  const char *disabled_hint = nullptr;
+  if (type->poll && !type->poll(type, snode->edittree, &disabled_hint)) {
+    BKE_report(
+        op->reports, RPT_WARNING, disabled_hint ? disabled_hint : "This node can't be added here");
+    return OPERATOR_CANCELLED;
+  }
+
+  ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
+  bNode *node = add_node(*C, idname, snode->runtime->cursor);
+  if (node == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+  WM_event_add_notifier(C, NC_NODE | NA_ADDED, nullptr);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus node_add_library_node_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent *event)
+{
+  ARegion *region = CTX_wm_region(C);
+  SpaceNode *snode = CTX_wm_space_node(C);
+  float2 &cursor = snode->runtime->cursor;
+  ARegion *main_region = BKE_area_find_region_type(CTX_wm_area(C), RGN_TYPE_WINDOW);
+  if (main_region == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+  if (region && region->regiontype == RGN_TYPE_WINDOW) {
+    ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &cursor.x, &cursor.y);
+  }
+  else {
+    /* Clicked in the Library: the middle of the graph. */
+    ui::view2d_region_to_view(
+        &main_region->v2d, main_region->winx / 2, main_region->winy / 2, &cursor.x, &cursor.y);
+  }
+  cursor /= UI_SCALE_FAC;
+  const wmOperatorStatus result = node_add_library_node_exec(C, op);
+  ED_region_tag_redraw(main_region);
+  return result;
+}
+
+void NODE_OT_add_library_node(wmOperatorType *ot)
+{
+  ot->name = "Add Node";
+  ot->description = "Add this node to the graph. Drag it to place it";
+  ot->idname = "NODE_OT_add_library_node";
+
+  ot->exec = node_add_library_node_exec;
+  ot->invoke = node_add_library_node_invoke;
+  ot->poll = ED_operator_node_editable;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  PropertyRNA *prop = RNA_def_string(ot->srna, "type", nullptr, 0, "Node Type", "");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /** \} */
@@ -1548,6 +1625,7 @@ static wmOperatorStatus node_add_color_exec(bContext *C, wmOperator *op)
       color_node = add_node(*C, "ShaderNodeRGB", snode->runtime->cursor);
       break;
     case NTREE_COMPOSIT:
+    case NTREE_TEXTURE_GRAPH:
       color_node = add_node(*C, "CompositorNodeRGB", snode->runtime->cursor);
       break;
     case NTREE_GEOMETRY:
@@ -1607,7 +1685,11 @@ static bool node_add_color_poll(bContext *C)
 {
   const SpaceNode *snode = CTX_wm_space_node(C);
   return ED_operator_node_editable(C) &&
-         ELEM(snode->nodetree->type, NTREE_SHADER, NTREE_COMPOSIT, NTREE_GEOMETRY);
+         ELEM(snode->nodetree->type,
+              NTREE_SHADER,
+              NTREE_COMPOSIT,
+              NTREE_GEOMETRY,
+              NTREE_TEXTURE_GRAPH);
 }
 
 void NODE_OT_add_color(wmOperatorType *ot)

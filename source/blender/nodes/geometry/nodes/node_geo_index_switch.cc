@@ -94,7 +94,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   StructureType value_structure_type = StructureType::Dynamic;
   StructureType index_structure_type = value_structure_type;
 
-  if (ntree->type == NTREE_COMPOSIT) {
+  if (ELEM(ntree->type, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
     const bool is_single_compositor_type = compositor::Result::is_single_value_only_type(
         compositor::socket_data_type_to_result_type(data_type));
     if (is_single_compositor_type) {

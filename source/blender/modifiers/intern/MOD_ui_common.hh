@@ -41,6 +41,15 @@ void modifier_vgroup_ui(ui::Layout &layout,
                         std::optional<StringRefNull> invert_vgroup_prop,
                         std::optional<StringRefNull> text);
 
+/**
+ * Draws a modifier's material: a material to pick, and the slot number when none is picked.
+ */
+void modifier_material_ui(ui::Layout &layout,
+                          PointerRNA *ptr,
+                          StringRefNull material_prop,
+                          StringRefNull index_prop,
+                          std::optional<StringRef> text);
+
 void modifier_grease_pencil_curve_header_draw(const bContext * /*C*/, Panel *panel);
 void modifier_grease_pencil_curve_panel_draw(const bContext * /*C*/, Panel *panel);
 
@@ -48,6 +57,21 @@ void modifier_grease_pencil_curve_panel_draw(const bContext * /*C*/, Panel *pane
  * Draw modifier error message.
  */
 void modifier_error_message_draw(ui::Layout &layout, PointerRNA *ptr);
+
+/**
+ * The source, pick and seed of Array and Radial Array: what each copy is made of.
+ */
+void modifier_array_source_draw(ui::Layout &layout, PointerRNA *ptr);
+
+/**
+ * The source, the list of objects with their weights or counts, the pick, the pattern and the
+ * seed of Place and Scatter.  pattern_names is the pattern with the object names, shown under
+ * it, or  pattern_error when the pattern can't be read.
+ */
+void modifier_place_source_draw(ui::Layout &layout,
+                                PointerRNA *ptr,
+                                StringRef pattern_names,
+                                StringRef pattern_error);
 
 PointerRNA *modifier_panel_get_property_pointers(Panel *panel, PointerRNA *r_ob_ptr);
 

@@ -57,6 +57,8 @@ void operatortypes_object()
   WM_operatortype_append(OBJECT_OT_parent_set);
   WM_operatortype_append(OBJECT_OT_parent_no_inverse_set);
   WM_operatortype_append(OBJECT_OT_parent_clear);
+  WM_operatortype_append(OBJECT_OT_group);
+  WM_operatortype_append(OBJECT_OT_ungroup);
   WM_operatortype_append(OBJECT_OT_vertex_parent_set);
   WM_operatortype_append(OBJECT_OT_track_set);
   WM_operatortype_append(OBJECT_OT_track_clear);
@@ -124,6 +126,8 @@ void operatortypes_object()
   WM_operatortype_append(OBJECT_OT_modifier_move_down);
   WM_operatortype_append(OBJECT_OT_modifier_move_to_index);
   WM_operatortype_append(OBJECT_OT_modifier_apply);
+  WM_operatortype_append(OBJECT_OT_modifier_bake);
+  WM_operatortype_append(OBJECT_OT_modifier_unbake);
   WM_operatortype_append(OBJECT_OT_modifier_apply_as_shapekey);
   WM_operatortype_append(OBJECT_OT_modifier_convert);
   WM_operatortype_append(OBJECT_OT_modifier_copy);
@@ -271,6 +275,7 @@ void operatortypes_object()
   WM_operatortype_append(OBJECT_OT_data_transfer);
   WM_operatortype_append(OBJECT_OT_datalayout_transfer);
   WM_operatortype_append(OBJECT_OT_surfacedeform_bind);
+  WM_operatortype_append(OBJECT_OT_auto_weights_bind);
 
   WM_operatortype_append(OBJECT_OT_hide_view_clear);
   WM_operatortype_append(OBJECT_OT_hide_view_set);

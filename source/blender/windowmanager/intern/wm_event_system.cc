@@ -36,6 +36,7 @@
 #include "BLI_string_utf8.h"
 #include "BLI_timer.h"
 
+#include "BKE_eval_break.hh"
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
@@ -530,6 +531,13 @@ void wm_event_do_depsgraph(bContext *C, bool is_after_open_file)
   }
 
   wm_surfaces_do_depsgraph(C);
+
+  /* Modifiers stopped with Esc are off now: say so, and show the objects without them. */
+  for (const bke::eval_break::Stopped &stopped : bke::eval_break::take_stopped()) {
+    WM_global_report(RPT_WARNING, stopped.message.c_str());
+    DEG_id_tag_update(stopped.id, ID_RECALC_GEOMETRY);
+    WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, stopped.id);
+  }
 }
 
 void wm_event_do_refresh_wm_and_depsgraph(bContext *C)

@@ -2367,6 +2367,9 @@ int icon_from_object_type(const Object *object)
       if (object->instance_collection && (object->transflag & OB_DUPLICOLLECTION)) {
         return ICON_OUTLINER_OB_GROUP_INSTANCE;
       }
+      else if (object->transflag & OB_TRANSFLAG_GROUP) {
+        return ICON_OBJECT_GROUP;
+      }
       else if (object->empty_drawtype == OB_EMPTY_IMAGE) {
         return ICON_OUTLINER_OB_IMAGE;
       }

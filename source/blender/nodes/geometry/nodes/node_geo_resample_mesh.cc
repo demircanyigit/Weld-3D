@@ -11,8 +11,7 @@
 
 #include "GEO_foreach_geometry.hh"
 #include "GEO_randomize.hh"
-
-#include "bmesh.hh"
+#include "GEO_resample_mesh.hh"
 
 #include "NOD_rna_define.hh"
 
@@ -40,9 +39,6 @@ static const EnumPropertyItem mode_items[] = {
      N_("Split every edge into a number of even segments")},
     {0, nullptr, 0, nullptr, nullptr},
 };
-
-/** Keeps a very small length from making a mesh that doesn't fit into memory. */
-static constexpr int64_t max_new_points = 100'000'000;
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -108,67 +104,10 @@ static Array<int> calc_edge_cuts(const Mesh &mesh,
       cuts[i] = std::max(counts[i] - 1, 0);
       return;
     }
-    const float segment_length = lengths[i];
-    if (segment_length <= 0.0f) {
-      return;
-    }
-    const double edge_length = math::distance(positions[edges[i][0]], positions[edges[i][1]]);
-    /* The small margin keeps an edge of exactly N lengths from getting an extra segment. */
-    const double segments = std::ceil(edge_length / double(segment_length) - 1e-5);
-    cuts[i] = int(std::clamp(segments - 1.0, 0.0, double(max_new_points)));
+    cuts[i] = geometry::resample_mesh_cuts_for_length(
+        math::distance(positions[edges[i][0]], positions[edges[i][1]]), lengths[i]);
   });
   return cuts;
-}
-
-static Mesh *resample_mesh(const Mesh &mesh,
-                           const Span<int> cuts,
-                           const std::optional<std::string> &new_points_id)
-{
-  BMeshCreateParams create_params{};
-  BMeshFromMeshParams convert_params{};
-  BMesh *bm = BKE_mesh_to_bmesh_ex(&mesh, &create_params, &convert_params);
-  BM_mesh_elem_table_ensure(bm, BM_EDGE);
-
-  /* Splitting adds edges, so the table doesn't stay valid. */
-  Array<BMEdge *> edges(mesh.edges_num);
-  for (const int i : edges.index_range()) {
-    edges[i] = BM_edge_at_index(bm, i);
-  }
-
-  /* Attributes are interpolated by the split. */
-  Vector<BMVert *> new_verts;
-  for (const int i : edges.index_range()) {
-    if (cuts[i] == 0) {
-      continue;
-    }
-    new_verts.resize(cuts[i]);
-    BM_edge_split_n(bm, edges[i], cuts[i], new_verts.data());
-    for (BMVert *vert : new_verts) {
-      BM_elem_flag_enable(vert, BM_ELEM_TAG);
-    }
-  }
-
-  Array<bool> new_points;
-  if (new_points_id) {
-    new_points.reinitialize(bm->totvert);
-    BMIter iter;
-    BMVert *vert;
-    int i;
-    BM_ITER_MESH_INDEX (vert, &iter, bm, BM_VERTS_OF_MESH, i) {
-      new_points[i] = BM_elem_flag_test_bool(vert, BM_ELEM_TAG);
-    }
-  }
-
-  Mesh *result = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, &mesh);
-  BM_mesh_free(bm);
-
-  if (new_points_id) {
-    result->attributes_for_write().add<bool>(
-        *new_points_id,
-        bke::AttrDomain::Point,
-        bke::AttributeInitVArray(VArray<bool>::from_span(new_points)));
-  }
-  return result;
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -195,11 +134,11 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (total_cuts == 0) {
       return;
     }
-    if (total_cuts > max_new_points) {
+    if (total_cuts > geometry::resample_mesh_max_new_points) {
       too_many_points = true;
       return;
     }
-    Mesh *result = resample_mesh(*src_mesh, cuts, new_points_id);
+    Mesh *result = geometry::resample_mesh(*src_mesh, cuts, new_points_id);
     geometry::debug_randomize_mesh_order(result);
     geometry_set.replace_mesh(result);
   });

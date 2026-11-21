@@ -74,6 +74,8 @@
 
 /* Only for #UI_OT_editsource. */
 #include "ED_screen.hh"
+#include "ED_select_utils.hh"
+#include "ED_view3d.hh"
 
 namespace blender {
 
@@ -2312,6 +2314,122 @@ static void UI_OT_button_string_clear(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Frame Target Operator (Weld 3D)
+ *
+ * Extra icon in object fields of modifiers, constraints and effects: selects the target object
+ * and frames it in the 3D view. The object that owns the modifier stays active, so the
+ * Properties editor keeps showing it. Shift also makes the target the active object.
+ * \{ */
+
+static Object *frame_target_object_get(bContext *C)
+{
+  PointerRNA ptr;
+  PropertyRNA *prop = nullptr;
+  int index_dummy;
+  Button *but = context_active_but_prop_get(C, &ptr, &prop, &index_dummy);
+  if (but == nullptr || prop == nullptr || RNA_property_type(prop) != PROP_POINTER) {
+    return nullptr;
+  }
+  const PointerRNA target_ptr = RNA_property_pointer_get(&ptr, prop);
+  if (target_ptr.data == nullptr || !RNA_struct_is_a(target_ptr.type, RNA_Object)) {
+    return nullptr;
+  }
+  return static_cast<Object *>(target_ptr.data);
+}
+
+/** The 3D view to frame in: the biggest one in the current screen. */
+static bool frame_target_view3d_find(bContext *C, ScrArea **r_area, ARegion **r_region)
+{
+  bScreen *screen = CTX_wm_screen(C);
+  if (screen == nullptr) {
+    return false;
+  }
+  ScrArea *area = BKE_screen_find_big_area(screen, SPACE_VIEW3D, 0);
+  if (area == nullptr) {
+    return false;
+  }
+  ARegion *region = BKE_area_find_region_active_win(area);
+  if (region == nullptr || region->regiontype != RGN_TYPE_WINDOW) {
+    region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
+  }
+  if (region == nullptr) {
+    return false;
+  }
+  *r_area = area;
+  *r_region = region;
+  return true;
+}
+
+static wmOperatorStatus frame_target_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  Object *ob = frame_target_object_get(C);
+  if (ob == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Base *base = BKE_view_layer_base_find(view_layer, ob);
+  if (base == nullptr) {
+    BKE_reportf(op->reports, RPT_WARNING, "\"%s\" is not in this view layer", ob->id.name + 2);
+    return OPERATOR_CANCELLED;
+  }
+
+  ScrArea *area = nullptr;
+  ARegion *region = nullptr;
+  if (!frame_target_view3d_find(C, &area, &region)) {
+    BKE_report(op->reports, RPT_WARNING, "No 3D Viewport");
+    return OPERATOR_CANCELLED;
+  }
+  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  if (!BKE_base_is_visible(v3d, base)) {
+    BKE_reportf(op->reports, RPT_WARNING, "\"%s\" is hidden", ob->id.name + 2);
+    return OPERATOR_CANCELLED;
+  }
+
+  const bool make_active = (event->modifier & KM_SHIFT) != 0;
+  if ((base->flag & BASE_SELECTABLE) != 0) {
+    if (make_active) {
+      ed::object::base_deselect_all(scene, view_layer, v3d, SEL_DESELECT);
+      ed::object::base_select(base, ed::object::BA_SELECT);
+      ed::object::base_activate_with_mode_exit_if_needed(C, base);
+    }
+    else {
+      ed::object::base_select(base, ed::object::BA_SELECT);
+    }
+    DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+    WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+    ED_outliner_select_sync_from_object_tag(C);
+  }
+
+  Object *objects[1] = {ob};
+  ED_view3d_frame_objects(
+      C, area, region, Span<Object *>(objects, 1), WM_operator_smooth_viewtx_get(op));
+
+  return OPERATOR_FINISHED;
+}
+
+static bool frame_target_poll(bContext *C)
+{
+  return CTX_wm_screen(C) != nullptr && CTX_data_view_layer(C) != nullptr;
+}
+
+static void UI_OT_frame_target(wmOperatorType *ot)
+{
+  ot->name = "Frame Target";
+  ot->idname = "UI_OT_frame_target";
+  ot->description =
+      "Select the target object and frame it in the 3D Viewport (Shift: also make it active)";
+
+  ot->invoke = frame_target_invoke;
+  ot->poll = frame_target_poll;
+  ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Drop Color Operator
  * \{ */
 
@@ -3025,6 +3143,7 @@ void operatortypes_ui()
   WM_operatortype_append(UI_OT_reloadtranslation);
   WM_operatortype_append(UI_OT_button_execute);
   WM_operatortype_append(UI_OT_button_string_clear);
+  WM_operatortype_append(UI_OT_frame_target);
 
   WM_operatortype_append(UI_OT_list_start_filter);
 

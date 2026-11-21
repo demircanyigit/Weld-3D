@@ -226,6 +226,13 @@ const bNodeSocket *find_preview_output_socket(const bNode &node)
     }
   }
 
+  /* A node with nothing linked is only computed for its preview, use its first output. */
+  for (const bNodeSocket *output : node.output_sockets()) {
+    if (is_socket_available(output)) {
+      return output;
+    }
+  }
+
   return nullptr;
 }
 

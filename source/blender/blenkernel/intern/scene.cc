@@ -55,6 +55,7 @@
 
 #include "BLT_translation.hh"
 
+#include "BKE_eval_break.hh"
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_animsys.h"
@@ -2665,6 +2666,7 @@ void BKE_scene_update_tag_audio_volume(Depsgraph * /*depsgraph*/, Scene *scene)
  */
 static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool only_if_tagged)
 {
+  const bke::eval_break::Scope esc_scope;
   if (only_if_tagged && DEG_is_fully_evaluated(depsgraph)) {
     return;
   }
@@ -2746,6 +2748,7 @@ void BKE_scene_graph_evaluated_ensure(Depsgraph *depsgraph, Main *bmain)
 
 void BKE_scene_graph_update_for_newframe_ex(Depsgraph *depsgraph, const bool clear_recalc)
 {
+  const bke::eval_break::Scope esc_scope;
   Scene *scene = DEG_get_input_scene(depsgraph);
   Main *bmain = DEG_get_bmain(depsgraph);
   bool used_multiple_passes = false;

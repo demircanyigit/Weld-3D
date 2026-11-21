@@ -10,6 +10,8 @@
 
 #include <string>
 
+#include <algorithm>
+
 #include "BLI_array.hh"
 #include "BLI_utildefines.h"
 
@@ -23,6 +25,7 @@
 
 #include "BKE_deform.hh"
 #include "BKE_mesh.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
 #include "UI_interface_layout.hh"
@@ -113,13 +116,14 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
   params.bow = data.bow;
   params.missing = data.missing;
   params.seed = data.seed;
-  const int totcol = ctx->object->totcol;
-  params.material = data.material >= 0 && data.material < std::max(totcol, 1) ? data.material :
-                                                                               -1;
-  params.material_count = data.material_count;
-  params.metal_material = data.metal_material >= 0 && data.metal_material < std::max(totcol, 1) ?
-                              data.metal_material :
-                              -1;
+  const int material = MOD_material_slot(*mesh, data.material_pick, data.material);
+  const int metal_material = MOD_material_slot(
+      *mesh, data.metal_material_pick, data.metal_material);
+  const int totcol = std::max<int>({ctx->object->totcol, mesh->totcol, 1});
+  params.material = material >= 0 && material < totcol ? material : -1;
+  /* A picked material is one material, not the first of several slots. */
+  params.material_count = data.material_pick ? 1 : data.material_count;
+  params.metal_material = metal_material >= 0 && metal_material < totcol ? metal_material : -1;
   params.board_index_id = "plank_id";
   params.random_id = "plank_random";
   params.part_id = "plank_part";
@@ -155,6 +159,9 @@ static Mesh *modify_mesh_compute(ModifierData *md, const ModifierEvalContext *ct
 
   std::string message;
   Mesh *result = geometry::mesh_planks(mesh, params, message);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (!message.empty()) {
     BKE_modifier_set_warning(ctx->object, md, "%s", message.c_str());
   }
@@ -291,10 +298,10 @@ static void materials_panel_draw(const bContext * /*C*/, Panel *panel)
   layout.use_property_split_set(true);
 
   ui::Layout &col = layout.column(true);
-  col.prop(ptr, "material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_material_ui(col, ptr, "material_index_pick", "material_index", std::nullopt);
   col.prop(ptr, "material_count", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (PlanksType(RNA_enum_get(ptr, "plank_type")) == PlanksType::Barrel) {
-    layout.prop(ptr, "metal_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    modifier_material_ui(layout, ptr, "metal_material_index_pick", "metal_material_index", std::nullopt);
   }
 }
 
@@ -310,11 +317,21 @@ static void panel_register(ARegionType *region_type)
 /* Taken from the cache when nothing it depends on changed, see #MOD_cached_modify_mesh. */
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
+  const auto &data = *reinterpret_cast<PlanksModifierData *>(md);
+  MOD_material_slot(*mesh, data.material_pick, 0);
+  MOD_material_slot(*mesh, data.metal_material_pick, 0);
   /* The materials are spread over the object's material slots. */
   return MOD_cached_modify_mesh(
       md, ctx, mesh, modify_mesh_compute, [&](geometry::SimCacheHasher &hasher) {
         hasher.add(ctx->object->totcol);
       });
+}
+
+static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
+{
+  PlanksModifierData *pick_data = reinterpret_cast<PlanksModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->material_pick), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->metal_material_pick), IDWALK_CB_USER);
 }
 
 ModifierTypeInfo modifierType_Planks = {
@@ -343,7 +360,7 @@ ModifierTypeInfo modifierType_Planks = {
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ nullptr,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,

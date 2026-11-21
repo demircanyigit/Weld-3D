@@ -493,8 +493,10 @@ static bool node_update_basis_socket(TreeDrawContext &tree_draw_ctx,
    * to account for the increased height of the taller sockets. */
   const bool is_multi_input = (input_socket ? input_socket->flag & SOCK_MULTI_INPUT : false);
   const float multi_input_socket_offset = is_multi_input ?
-                                              std::max(input_socket->runtime->total_inputs - 2,
-                                                       0) *
+                                              std::max(node_socket_multi_input_rows(
+                                                                   *input_socket) -
+                                                               2,
+                                                           0) *
                                                   NODE_MULTI_INPUT_LINK_GAP :
                                               0.0f;
   locy -= multi_input_socket_offset * 0.5f;
@@ -1849,8 +1851,10 @@ static void node_draw_socket(const bContext &C,
       socket_location.y + half_height,
   };
 
-  node_draw_nodesocket(
-      &rect, socket_color, outline_color, outline_thickness, sock.display_shape, aspect);
+  /* Tree Graph slots that take many links are straight bars. */
+  const int shape = multi_socket && ntree.type == NTREE_TREE_GRAPH ? SOCK_DISPLAY_SHAPE_SQUARE :
+                                                                     sock.display_shape;
+  node_draw_nodesocket(&rect, socket_color, outline_color, outline_thickness, shape, aspect);
 
   node_socket_tooltip_set(
       block, sock.index_in_tree(), socket_location, float2(2.0f * half_width, 2.0f * half_height));
@@ -2355,6 +2359,10 @@ static std::optional<std::chrono::nanoseconds> node_get_execution_time(
     case NTREE_GEOMETRY:
       return geo_node_get_execution_time(tree_draw_ctx, snode, node);
     case NTREE_COMPOSIT:
+    case NTREE_TEXTURE_GRAPH:
+      if (tree_draw_ctx.compositor_per_node_execution_time == nullptr) {
+        return std::nullopt;
+      }
       return compositor_node_get_execution_time(tree_draw_ctx, snode, node);
     default:
       return std::nullopt;
@@ -2551,7 +2559,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
     rows.append(std::move(row));
   }
 
-  if (snode.edittree->type == NTREE_COMPOSIT) {
+  if (ELEM(snode.edittree->type, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
     node_get_compositor_extra_info(tree_draw_ctx, snode, node, rows);
     return rows;
   }
@@ -4749,6 +4757,12 @@ static void draw_nodetree(const bContext &C,
     tree_draw_ctx.compositor_per_node_execution_time =
         &scene->runtime->compositor.per_node_execution_time;
   }
+  else if (ntree.type == NTREE_TEXTURE_GRAPH) {
+    /* Times are kept for the graph open in the editor, its node groups show their total. */
+    tree_draw_ctx.compositor_per_node_execution_time =
+        const_cast<Map<bNodeInstanceKey, timeit::Nanoseconds> *>(
+            ED_texture_graph_node_times(snode->nodetree));
+  }
   else if (ntree.type == NTREE_SHADER) {
     if (USER_EXPERIMENTAL_TEST(&U, use_shader_node_previews) &&
         BKE_scene_uses_shader_previews(CTX_data_scene(&C)) &&
@@ -4819,7 +4833,7 @@ void node_draw_space(const bContext &C, ARegion &region)
   snode_set_context(C);
 
   const int grid_levels = ui::theme::get_value_type(TH_NODE_GRID_LEVELS, SPACE_NODE);
-  ui::view2d_dot_grid_draw(&v2d, TH_GRID, NODE_GRID_STEP_SIZE, grid_levels);
+  ui::view2d_line_grid_draw(&v2d, TH_GRID, NODE_GRID_STEP_SIZE, grid_levels);
 
   /* Draw parent node trees. */
   if (snode.treepath.last) {

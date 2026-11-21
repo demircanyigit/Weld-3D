@@ -35,4 +35,16 @@ void cmp_node_type_base(bke::bNodeType *ntype,
                         std::string idname,
                         std::optional<int16_t> legacy_type = std::nullopt);
 
+/** Nodes that only exist in Texture Graphs (evaluated by the compositor engine). */
+bool tg_node_poll_default(const bke::bNodeType *ntype,
+                          const bNodeTree *ntree,
+                          const char **r_disabled_hint);
+void tg_node_type_base(bke::bNodeType *ntype, std::string idname);
+
+/** Nodes of Tree Graphs, they only describe the tree, the Tree modifier grows it. */
+bool tree_graph_node_poll_default(const bke::bNodeType *ntype,
+                                  const bNodeTree *ntree,
+                                  const char **r_disabled_hint);
+void tree_graph_node_type_base(bke::bNodeType *ntype, std::string idname);
+
 }  // namespace blender

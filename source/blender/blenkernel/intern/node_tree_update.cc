@@ -32,6 +32,7 @@
 #include "BKE_node_tree_update.hh"
 
 #include "MOD_nodes.hh"
+#include "MOD_tree.hh"
 
 #include "NOD_geo_viewer.hh"
 #include "NOD_geometry_nodes_dependencies.hh"
@@ -281,6 +282,12 @@ struct NodeTreeRelations {
             modifiers_users_->add(nmd->node_group, {&object, &md});
           }
         }
+        else if (md.type == eModifierType_Tree) {
+          TreeModifierData *tmd = reinterpret_cast<TreeModifierData *>(&md);
+          if (tmd->tree_graph && !ID_MISSING(tmd->tree_graph)) {
+            modifiers_users_->add(tmd->tree_graph, {&object, &md});
+          }
+        }
       }
     }
   }
@@ -387,6 +394,15 @@ class NodeTreeMainUpdater {
       this->reset_changed_flags(*ntree);
 
       if (result.interface_changed) {
+        if (ntree->type == NTREE_TREE_GRAPH) {
+          relations_.ensure_modifier_users();
+          for (const ObjectModifierPair &pair : relations_.get_modifier_users(ntree)) {
+            if (pair.second->type == eModifierType_Tree) {
+              MOD_tree_update_interface(pair.first,
+                                        reinterpret_cast<TreeModifierData *>(pair.second));
+            }
+          }
+        }
         if (ntree->type == NTREE_GEOMETRY) {
           relations_.ensure_modifier_users();
           for (const ObjectModifierPair &pair : relations_.get_modifier_users(ntree)) {
@@ -527,7 +543,13 @@ class NodeTreeMainUpdater {
     this->make_node_previews_dirty(ntree);
 
     this->propagate_runtime_flags(ntree);
-    if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT, NTREE_SHADER)) {
+    if (ELEM(ntree.type,
+             NTREE_GEOMETRY,
+             NTREE_COMPOSIT,
+             NTREE_SHADER,
+             NTREE_TEXTURE_GRAPH,
+             NTREE_TREE_GRAPH))
+    {
       if (this->propagate_enum_definitions(ntree)) {
         result.interface_changed = true;
       }
@@ -539,7 +561,7 @@ class NodeTreeMainUpdater {
       }
     }
 
-    if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
+    if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
       if (node_structure_type_inferencing::update_structure_type_interface(ntree)) {
         result.interface_changed = true;
       }
@@ -555,7 +577,7 @@ class NodeTreeMainUpdater {
       }
     }
 
-    if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
+    if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
       this->update_socket_shapes(ntree);
     }
 

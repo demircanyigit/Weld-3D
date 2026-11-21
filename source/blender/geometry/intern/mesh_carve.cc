@@ -40,36 +40,127 @@ static float smooth01(const float x)
   return t * t * (3.0f - 2.0f * t);
 }
 
-static float value_noise(const float x, const float y, const float channel)
+/** Wraps a lattice index so it repeats every \a n, when \a n is above zero. */
+static float wrap_index(const float i, const float n)
+{
+  return n > 0.0f ? i - n * std::floor(i / n) : i;
+}
+
+/** Value noise. When \a cells is above zero, the lattice repeats every that many cells. */
+static float value_noise_wrap(const float x,
+                              const float y,
+                              const float channel,
+                              const float2 cells)
 {
   const float ix = std::floor(x);
   const float iy = std::floor(y);
   const float ux = smooth01(x - ix);
   const float uy = smooth01(y - iy);
-  const float a = hash3(ix, iy, channel);
-  const float b = hash3(ix + 1.0f, iy, channel);
-  const float c = hash3(ix, iy + 1.0f, channel);
-  const float d = hash3(ix + 1.0f, iy + 1.0f, channel);
+  const float x0 = wrap_index(ix, cells.x);
+  const float x1 = wrap_index(ix + 1.0f, cells.x);
+  const float y0 = wrap_index(iy, cells.y);
+  const float y1 = wrap_index(iy + 1.0f, cells.y);
+  const float a = hash3(x0, y0, channel);
+  const float b = hash3(x1, y0, channel);
+  const float c = hash3(x0, y1, channel);
+  const float d = hash3(x1, y1, channel);
   const float bottom = a + (b - a) * ux;
   const float top = c + (d - c) * ux;
   return bottom + (top - bottom) * uy;
 }
 
-static float value_fbm(const float x, const float y, const float channel)
+static float value_noise(const float x, const float y, const float channel)
 {
-  return (value_noise(x, y, channel) * 4.0f + value_noise(x * 2.0f, y * 2.0f, channel) * 2.0f +
-          value_noise(x * 4.0f, y * 4.0f, channel)) /
-         7.0f;
+  return value_noise_wrap(x, y, channel, float2(0.0f));
 }
+
+/**
+ * For textures, patterns can repeat every #period pattern units. Stones are then counted by
+ * index, and each index is wrapped before it is hashed, so the stones past an edge are the ones
+ * at the other side. Without a period, patterns are read as before.
+ */
+struct Tiling {
+  float2 period = float2(0.0f);
+  /** Added to wrapped indices instead of moving the pattern, so a seed keeps it repeating. */
+  float2 seed = float2(0.0f);
+
+  bool on() const
+  {
+    return period.x > 0.0f && period.y > 0.0f;
+  }
+
+  /** How many things of \a size fit in \a length, at least one. */
+  static float count(const float length, const float size)
+  {
+    return std::max(std::round(length / std::max(size, 1e-6f)), 1.0f);
+  }
+
+  /** The key to hash for index \a i of things that repeat every \a n. */
+  float key(const float i, const float n, const float s) const
+  {
+    if (!on()) {
+      return i;
+    }
+    return wrap_index(i, std::max(n, 1.0f)) + s;
+  }
+
+  /** Value noise at \a p with \a freq lattice cells per pattern unit. */
+  float noise(const float2 p, const float freq, const float channel) const
+  {
+    if (!on()) {
+      return value_noise(p.x * freq, p.y * freq, channel);
+    }
+    const float2 cells(count(period.x * freq, 1.0f), count(period.y * freq, 1.0f));
+    return value_noise_wrap(
+        p.x * cells.x / period.x, p.y * cells.y / period.y, channel + seed.x * 0.37f, cells);
+  }
+
+  /** Three octaves, weighted 4, 2 and 1. */
+  float fbm3(const float2 p, const float freq, const float channel) const
+  {
+    return (noise(p, freq, channel) * 4.0f + noise(p, freq * 2.0f, channel) * 2.0f +
+            noise(p, freq * 4.0f, channel)) /
+           7.0f;
+  }
+
+  /** Octaves of halving weight. */
+  float fbm(const float2 p, const float freq, const float channel, const int octaves) const
+  {
+    float sum = 0.0f;
+    float weight = 1.0f;
+    float total = 0.0f;
+    float f = freq;
+    for (int o = 0; o < octaves; o++) {
+      sum += noise(p, f, channel + float(o)) * weight;
+      total += weight;
+      weight *= 0.5f;
+      f *= 2.0f;
+    }
+    return sum / total;
+  }
+};
 
 /**
  * Courses of stones (or regular bricks) as a height: 0 in the mortar, rising over a rounded
  * shoulder to the face of each stone.
  */
-static float stone_wall(const float2 p, const CarvePatternParams &params, const bool bricks)
+static float stone_wall(const float2 p,
+                        const CarvePatternParams &params,
+                        const bool bricks,
+                        const Tiling &tiling,
+                        float *r_id)
 {
-  const float rh = std::max(params.row_height, 1e-4f);
-  const float ln = std::max(params.stone_length, 1e-4f);
+  float rh = std::max(params.row_height, 1e-4f);
+  float ln = std::max(params.stone_length, 1e-4f);
+  /* Rows and stones per row that repeat; rows in pairs, since every other row is shifted. */
+  float rows = 0.0f;
+  float per_row = 0.0f;
+  if (tiling.on()) {
+    rows = std::max(std::round(tiling.period.y / rh / 2.0f), 1.0f) * 2.0f;
+    rh = tiling.period.y / rows;
+    per_row = Tiling::count(tiling.period.x, ln);
+    ln = tiling.period.x / per_row;
+  }
   const float variation = std::clamp(params.variation, 0.0f, 1.0f);
   const float rv = bricks ? 0.0f : variation * 0.45f;
   const float lv = bricks ? 0.0f : variation * 0.45f;
@@ -78,7 +169,10 @@ static float stone_wall(const float2 p, const CarvePatternParams &params, const 
   const float depth_variation = bricks ? 0.05f : 0.2f;
   const float surface = std::max(params.roughness, 0.0f) * 0.3f;
 
-  auto row_edge = [&](const float k) { return (k + (hash3(k, 0.0f, 1.0f) - 0.5f) * 2.0f * rv) * rh; };
+  auto row_key = [&](const float k) { return tiling.key(k, rows, tiling.seed.y); };
+  auto row_edge = [&](const float k) {
+    return (k + (hash3(row_key(k), 0.0f, 1.0f) - 0.5f) * 2.0f * rv) * rh;
+  };
 
   float k = std::floor(p.y / rh);
   if (p.y < row_edge(k)) {
@@ -90,10 +184,12 @@ static float stone_wall(const float2 p, const CarvePatternParams &params, const 
   float y0 = row_edge(k);
   float y1 = row_edge(k + 1.0f);
 
+  const float kk = row_key(k);
   const float off = bricks ? (std::fmod(std::abs(k), 2.0f) * 0.5f * ln) :
-                             hash3(k, 0.0f, 2.0f) * ln;
+                             hash3(kk, 0.0f, 2.0f) * ln;
+  auto stone_key = [&](const float i) { return tiling.key(i, per_row, tiling.seed.x); };
   auto stone_edge = [&](const float i) {
-    return (i + (hash3(k, i, 3.0f) - 0.5f) * 2.0f * lv) * ln - off;
+    return (i + (hash3(kk, stone_key(i), 3.0f) - 0.5f) * 2.0f * lv) * ln - off;
   };
   float i = std::floor((p.x + off) / ln);
   if (p.x < stone_edge(i)) {
@@ -104,11 +200,12 @@ static float stone_wall(const float2 p, const CarvePatternParams &params, const 
   }
   const float x0 = stone_edge(i);
   const float x1 = stone_edge(i + 1.0f);
+  const float ik = stone_key(i);
 
   /* Tall stones are sometimes two smaller stones on top of each other. */
   float sub = 0.0f;
-  if ((y1 - y0) > 1.05f * rh && hash3(k, i, 4.0f) < split) {
-    const float ys = y0 + (y1 - y0) * (0.4f + 0.2f * hash3(k, i, 5.0f));
+  if ((y1 - y0) > 1.05f * rh && hash3(kk, ik, 4.0f) < split) {
+    const float ys = y0 + (y1 - y0) * (0.4f + 0.2f * hash3(kk, ik, 5.0f));
     if (p.y < ys) {
       y1 = ys;
     }
@@ -117,7 +214,10 @@ static float stone_wall(const float2 p, const CarvePatternParams &params, const 
       sub = 1.0f;
     }
   }
-  const float sid = hash3(k, i, 6.0f + sub);
+  const float sid = hash3(kk, ik, 6.0f + sub);
+  if (r_id) {
+    *r_id = sid;
+  }
 
   const float m = std::max(params.mortar, 0.0f) * 0.5f;
   const float hx = (x1 - x0) * 0.5f - m;
@@ -135,8 +235,10 @@ static float stone_wall(const float2 p, const CarvePatternParams &params, const 
   float sdf = std::sqrt(math::square(std::max(qx, 0.0f)) + math::square(std::max(qy, 0.0f))) +
               std::min(std::max(qx, qy), 0.0f) - r;
   /* Irregular edges only eat into the stone, so it stays inside its cell. */
-  sdf += value_noise(p.x / rh * 2.0f + sid * 50.0f, p.y / rh * 2.0f, 7.0f) * irregularity *
-         small_side;
+  if (irregularity > 0.0f) {
+    sdf += value_noise(p.x / rh * 2.0f + sid * 50.0f, p.y / rh * 2.0f, 7.0f) * irregularity *
+           small_side;
+  }
   const float inside = -sdf;
   if (inside <= 0.0f) {
     return 0.0f;
@@ -144,24 +246,9 @@ static float stone_wall(const float2 p, const CarvePatternParams &params, const 
   const float bevel = std::max(rnd * small_side, 1e-5f);
   const float t = std::min(inside / bevel, 1.0f);
   const float shoulder = t * (2.0f - t);
-  float face = 1.0f - depth_variation * hash3(k, i, 8.0f + sub);
-  face += surface * (value_fbm(p.x / rh * 4.0f, p.y / rh * 4.0f, 9.0f) - 0.5f);
+  float face = 1.0f - depth_variation * hash3(kk, ik, 8.0f + sub);
+  face += surface * (tiling.fbm3(p, 4.0f / rh, 9.0f) - 0.5f);
   return std::clamp(shoulder * face, 0.0f, 1.0f);
-}
-
-static float value_fbm_octaves(const float x, const float y, const float channel, const int octaves)
-{
-  float sum = 0.0f;
-  float weight = 1.0f;
-  float total = 0.0f;
-  float f = 1.0f;
-  for (int o = 0; o < octaves; o++) {
-    sum += value_noise(x * f, y * f, channel + float(o)) * weight;
-    total += weight;
-    weight *= 0.5f;
-    f *= 2.0f;
-  }
-  return sum / total;
 }
 
 /* -------------------------------------------------------------------- */
@@ -189,6 +276,10 @@ struct WallStyle {
   float unit = 0.3f;
   /* All. */
   float mortar = 0.03f, rc = 0.25f, depth = 0.3f, bulge = 0.3f;
+  /* When tiled: rows (courses) or grid cells (cells, ashlar) that repeat, and the cell sizes. */
+  float rows = 0.0f, cols = 0.0f;
+  float2 cell = float2(0.0f);
+  Tiling tiling;
 };
 
 static WallStyle wall_style(const CarvePattern pattern)
@@ -317,6 +408,8 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
   const int band = s.band;
   const float extra = band > 0 ? 0.5f * rh : 0.0f;
 
+  const Tiling &tiling = s.tiling;
+  auto row_key = [&](const float r) { return tiling.key(r, s.rows, tiling.seed.y); };
   auto is_band = [&](const float r) {
     return band > 0 && (r - float(band) * std::floor(r / float(band))) == 0.0f;
   };
@@ -325,14 +418,25 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
     const float bands_below = band > 0 ? std::floor((r - 1.0f) / float(band)) + 1.0f : 0.0f;
     const float jitter = (is_band(r) || is_band(r - 1.0f)) ?
                              0.0f :
-                             (hash3(r, 0.0f, 32.0f) - 0.5f) * s.rv;
+                             (hash3(row_key(r), 0.0f, 32.0f) - 0.5f) * s.rv;
     return (r + jitter) * rh + bands_below * extra;
   };
+  auto row_len_free = [&](const float r) {
+    return is_band(r) ? ln * 3.0f :
+                        ln * (1.0f + (hash3(row_key(r), 0.0f, 31.0f) - 0.5f) * 2.0f * s.lv);
+  };
+  /* When tiled, a whole number of stones fits across each course. */
+  auto row_count = [&](const float r) {
+    return tiling.on() ? Tiling::count(tiling.period.x, row_len_free(r)) : 0.0f;
+  };
   auto row_len = [&](const float r) {
-    return is_band(r) ? ln * 3.0f : ln * (1.0f + (hash3(r, 0.0f, 31.0f) - 0.5f) * 2.0f * s.lv);
+    return tiling.on() ? tiling.period.x / row_count(r) : row_len_free(r);
   };
   /* About half a stone from the course below, so head joints never line up. */
-  auto row_off = [&](const float r) { return fract(r * 0.5f + (hash3(r, 0.0f, 1.0f) - 0.5f) * 0.5f); };
+  auto row_off = [&](const float r) {
+    const float rw = tiling.on() ? wrap_index(r, s.rows) : r;
+    return fract(rw * 0.5f + (hash3(row_key(r), 0.0f, 1.0f) - 0.5f) * 0.5f);
+  };
 
   float r0 = std::floor(p.y / (rh + (band > 0 ? extra / float(band) : 0.0f)));
   for (int iter = 0; iter < 3; iter++) {
@@ -346,6 +450,9 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
 
   for (int dr = -1; dr <= 1; dr++) {
     const float r = r0 + float(dr);
+    const float rk = row_key(r);
+    const float per_row = row_count(r);
+    auto stone_key = [&](const float c) { return tiling.key(c, per_row, tiling.seed.x); };
     const float lnr = row_len(r);
     const float off = row_off(r);
     const float e0 = row_edge(r);
@@ -355,42 +462,44 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
     const bool band_row = is_band(r);
     const float c0 = std::floor(p.x / lnr - off);
     auto joint = [&](const float i) {
-      return (i + off + (hash3(r, i, 3.0f) - 0.5f) * s.jl) * lnr;
+      return (i + off + (hash3(rk, stone_key(i), 3.0f) - 0.5f) * s.jl) * lnr;
     };
     for (int dc = -2; dc <= 2; dc++) {
       const float c = c0 + float(dc);
+      const float ck = stone_key(c);
       const float x0 = joint(c);
       const float x1 = joint(c + 1.0f);
       /* A tall stone from the course below takes this spot. */
       {
         const float rb = r - 1.0f;
         const float cb = std::floor((x0 + x1) * 0.5f / row_len(rb) - row_off(rb));
-        if (!is_band(rb) && !band_row && hash3(rb, cb, 33.0f) < s.tall) {
+        const float cbk = tiling.key(cb, row_count(rb), tiling.seed.x);
+        if (!is_band(rb) && !band_row && hash3(row_key(rb), cbk, 33.0f) < s.tall) {
           continue;
         }
       }
       /* Each stone's own bottom and top: stepped beds. */
       const float st = band_row ? s.step * 0.3f : s.step;
-      const float b = e0 + (hash3(r, c, 4.0f) - 0.5f) * 2.0f * st * H;
-      float t = e1 + (hash3(r, c, 5.0f) - 0.5f) * 2.0f * st * H;
-      const bool tall = !band_row && !is_band(r + 1.0f) && hash3(r, c, 33.0f) < s.tall;
+      const float b = e0 + (hash3(rk, ck, 4.0f) - 0.5f) * 2.0f * st * H;
+      float t = e1 + (hash3(rk, ck, 5.0f) - 0.5f) * 2.0f * st * H;
+      const bool tall = !band_row && !is_band(r + 1.0f) && hash3(rk, ck, 33.0f) < s.tall;
       if (tall) {
-        t = e2 + (hash3(r, c, 5.0f) - 0.5f) * 2.0f * st * H;
+        t = e2 + (hash3(rk, ck, 5.0f) - 0.5f) * 2.0f * st * H;
       }
-      const float angle = (hash3(r, c, 6.0f) - 0.5f) * 2.0f * (band_row ? s.tilt * 0.3f : s.tilt);
-      const float radf = s.rad_lo + (s.rad_hi - s.rad_lo) * hash3(r, c, 7.0f);
-      const float sid = hash3(r, c, 8.0f);
-      const bool stack = !band_row && !tall && hash3(r, c, 34.0f) < s.stack;
+      const float angle = (hash3(rk, ck, 6.0f) - 0.5f) * 2.0f * (band_row ? s.tilt * 0.3f : s.tilt);
+      const float radf = s.rad_lo + (s.rad_hi - s.rad_lo) * hash3(rk, ck, 7.0f);
+      const float sid = hash3(rk, ck, 8.0f);
+      const bool stack = !band_row && !tall && hash3(rk, ck, 34.0f) < s.stack;
       const bool fill = !band_row && !tall && !stack &&
                         (value_noise((c + off) * 0.45f, r * 0.45f, 40.0f) * 0.7f +
-                         hash3(r, c, 41.0f) * 0.3f) < s.filler * 1.6f;
+                         hash3(rk, ck, 41.0f) * 0.3f) < s.filler * 1.6f;
       const float2 half((x1 - x0) * 0.5f, (t - b) * 0.5f);
       const float2 center((x0 + x1) * 0.5f, (b + t) * 0.5f);
       float2 uv;
       if (stack) {
         /* Two thin stones stacked, the top one shifted. */
-        const float split = b + (t - b) * (0.35f + 0.3f * hash3(r, c, 35.0f));
-        const float shift = (hash3(r, c, 36.0f) - 0.5f) * 0.5f * (x1 - x0);
+        const float split = b + (t - b) * (0.35f + 0.3f * hash3(rk, ck, 35.0f));
+        const float shift = (hash3(rk, ck, 36.0f) - 0.5f) * 0.5f * (x1 - x0);
         const float ys[3] = {b, split, t};
         for (int k = 0; k < 2; k++) {
           const float hy = (ys[k + 1] - ys[k]) * 0.5f;
@@ -398,10 +507,10 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
           const float d = box_sdf(p,
                                   sc,
                                   float2(half.x, hy),
-                                  angle + (hash3(r, c, 37.0f + float(k)) - 0.5f) * 0.06f,
+                                  angle + (hash3(rk, ck, 37.0f + float(k)) - 0.5f) * 0.06f,
                                   radf * std::min(half.x, hy),
                                   uv);
-          nearest.add(d, uv.x, uv.y, hash3(r, c, 38.0f + float(k)));
+          nearest.add(d, uv.x, uv.y, hash3(rk, ck, 38.0f + float(k)));
         }
       }
       else if (fill) {
@@ -409,24 +518,24 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
         for (int k = 0; k < 4; k++) {
           const float u = float(k % 2) * 0.5f + 0.25f;
           const float v = float(k / 2) * 0.5f + 0.25f;
-          const float fx = x0 + (x1 - x0) * (u + (hash3(r, c, 42.0f + float(k)) - 0.5f) * 0.15f);
-          const float fy = b + (t - b) * (v + (hash3(r, c, 46.0f + float(k)) - 0.5f) * 0.15f);
+          const float fx = x0 + (x1 - x0) * (u + (hash3(rk, ck, 42.0f + float(k)) - 0.5f) * 0.15f);
+          const float fy = b + (t - b) * (v + (hash3(rk, ck, 46.0f + float(k)) - 0.5f) * 0.15f);
           const float fh = 0.3f * std::min(x1 - x0, t - b) *
-                           (0.85f + 0.3f * hash3(r, c, 50.0f + float(k)));
+                           (0.85f + 0.3f * hash3(rk, ck, 50.0f + float(k)));
           const float d = box_sdf(p,
                                   float2(fx, fy),
                                   float2(fh * 1.2f, fh),
-                                  (hash3(r, c, 54.0f + float(k)) - 0.5f) * 0.6f,
+                                  (hash3(rk, ck, 54.0f + float(k)) - 0.5f) * 0.6f,
                                   fh * 0.9f,
                                   uv);
-          nearest.add(d, uv.x, uv.y, hash3(r, c, 58.0f + float(k)));
+          nearest.add(d, uv.x, uv.y, hash3(rk, ck, 58.0f + float(k)));
         }
       }
       else {
         /* Now and then a long stone is cracked in two. */
-        const bool crack = (x1 - x0) > 1.15f * ln && hash3(r, c, 60.0f) < s.split;
-        const float th = (hash3(r, c, 61.0f) - 0.5f) * 1.1f;
-        const float ccx = center.x + (hash3(r, c, 62.0f) - 0.5f) * 0.35f * (x1 - x0);
+        const bool crack = (x1 - x0) > 1.15f * ln && hash3(rk, ck, 60.0f) < s.split;
+        const float th = (hash3(rk, ck, 61.0f) - 0.5f) * 1.1f;
+        const float ccx = center.x + (hash3(rk, ck, 62.0f) - 0.5f) * 0.35f * (x1 - x0);
         const float2 normal(std::cos(th), std::sin(th));
         const float d = box_sdf(p, center, half, angle, radf * std::min(half.x, half.y), uv);
         nearest.add(d, uv.x, uv.y, sid, crack, normal, normal.x * ccx + normal.y * center.y);
@@ -438,18 +547,21 @@ static void wall_courses(const float2 p, const WallStyle &s, WallNearest &neares
 static void wall_cells(const float2 p, const WallStyle &s, WallNearest &nearest)
 {
   const float size = s.size;
-  const float st = s.stretch;
-  const float2 q(p.x / st, p.y);
-  const float gx0 = std::floor(q.x / size);
-  const float gy0 = std::floor(q.y / size);
+  const Tiling &tiling = s.tiling;
+  /* Cell width and height: stretched sideways, or fitted to the period when tiled. */
+  const float2 cs = tiling.on() ? s.cell : float2(size * s.stretch, size);
+  const float gx0 = std::floor(p.x / cs.x);
+  const float gy0 = std::floor(p.y / cs.y);
   for (int dy = -2; dy <= 2; dy++) {
     for (int dx = -2; dx <= 2; dx++) {
       const float gx = gx0 + float(dx);
       const float gy = gy0 + float(dy);
-      const float cx = (gx + 0.5f + (hash3(gx, gy, 1.0f) - 0.5f) * s.jitter) * size * st;
-      const float cy = (gy + 0.5f + (hash3(gx, gy, 2.0f) - 0.5f) * s.jitter) * size;
-      float radius = (hash3(gx, gy, 3.0f) - 0.5f) * 2.0f * s.weight * size;
-      const float sid = hash3(gx, gy, 4.0f);
+      const float kx = tiling.key(gx, s.cols, tiling.seed.x);
+      const float ky = tiling.key(gy, s.rows, tiling.seed.y);
+      const float cx = (gx + 0.5f + (hash3(kx, ky, 1.0f) - 0.5f) * s.jitter) * cs.x;
+      const float cy = (gy + 0.5f + (hash3(kx, ky, 2.0f) - 0.5f) * s.jitter) * cs.y;
+      float radius = (hash3(kx, ky, 3.0f) - 0.5f) * 2.0f * s.weight * size;
+      const float sid = hash3(kx, ky, 4.0f);
       const float2 d = p - float2(cx, cy);
       if (s.wobble > 0.0f) {
         /* A wobbly outline: a few waves around the center. */
@@ -470,8 +582,10 @@ static void wall_cells(const float2 p, const WallStyle &s, WallNearest &nearest)
 
 static void wall_ashlar(const float2 p, const WallStyle &s, WallNearest &nearest)
 {
-  const float u = s.unit;
-  const float M = 2.0f * u;
+  const Tiling &tiling = s.tiling;
+  /* Block width and height, fitted to the period when tiled. */
+  const float2 M = tiling.on() ? s.cell : float2(2.0f * s.unit);
+  const float2 u = M * 0.5f;
   /* Each 2x2 block is one stone, two halves, a half and two quarters, or four quarters. */
   static const float parts[5][4][4] = {
       {{0, 0, 2, 2}, {-1, 0, 0, 0}, {-1, 0, 0, 0}, {-1, 0, 0, 0}},
@@ -480,27 +594,29 @@ static void wall_ashlar(const float2 p, const WallStyle &s, WallNearest &nearest
       {{0, 0, 2, 1}, {0, 1, 1, 1}, {1, 1, 1, 1}, {-1, 0, 0, 0}},
       {{0, 0, 1, 1}, {1, 0, 1, 1}, {0, 1, 1, 1}, {1, 1, 1, 1}},
   };
-  const float gy0 = std::floor(p.y / M);
+  const float gy0 = std::floor(p.y / M.y);
   for (int dy = -1; dy <= 1; dy++) {
     const float gy = gy0 + float(dy);
-    const float off = hash3(gy, 0.0f, 1.0f) * M;
-    const float gx0 = std::floor((p.x + off) / M);
+    const float ky = tiling.key(gy, s.rows, tiling.seed.y);
+    const float off = hash3(ky, 0.0f, 1.0f) * M.x;
+    const float gx0 = std::floor((p.x + off) / M.x);
     for (int dx = -1; dx <= 1; dx++) {
       const float gx = gx0 + float(dx);
-      const float x0 = gx * M - off;
-      const float y0 = gy * M;
-      const int kind = std::min(int(hash3(gx, gy, 2.0f) * 5.0f), 4);
+      const float kx = tiling.key(gx, s.cols, tiling.seed.x);
+      const float x0 = gx * M.x - off;
+      const float y0 = gy * M.y;
+      const int kind = std::min(int(hash3(kx, ky, 2.0f) * 5.0f), 4);
       for (int k = 0; k < 4; k++) {
         const float *part = parts[kind][k];
         if (part[0] < 0.0f) {
           break;
         }
-        const float2 half(part[2] * u * 0.5f, part[3] * u * 0.5f);
-        const float2 center(x0 + part[0] * u + half.x, y0 + part[1] * u + half.y);
-        const float radf = s.rad_lo + (s.rad_hi - s.rad_lo) * hash3(gx, gy, 10.0f + float(k));
+        const float2 half(part[2] * u.x * 0.5f, part[3] * u.y * 0.5f);
+        const float2 center(x0 + part[0] * u.x + half.x, y0 + part[1] * u.y + half.y);
+        const float radf = s.rad_lo + (s.rad_hi - s.rad_lo) * hash3(kx, ky, 10.0f + float(k));
         float2 uv;
         const float d = box_sdf(p, center, half, 0.0f, radf * std::min(half.x, half.y), uv);
-        nearest.add(d, uv.x, uv.y, hash3(gx * 4.0f + float(k), gy, 11.0f));
+        nearest.add(d, uv.x, uv.y, hash3(kx * 4.0f + float(k), ky, 11.0f));
       }
     }
   }
@@ -509,7 +625,10 @@ static void wall_ashlar(const float2 p, const WallStyle &s, WallNearest &nearest
 /**
  * The wall patterns. The settings scale each style; their defaults give the style as designed.
  */
-static float wall(const float2 p, const CarvePatternParams &params)
+static float wall(const float2 p,
+                  const CarvePatternParams &params,
+                  const Tiling &tiling,
+                  float *r_id)
 {
   WallStyle s = wall_style(params.pattern);
   const float lenf = std::max(params.stone_length, 1e-4f) / 0.8f;
@@ -519,6 +638,10 @@ static float wall(const float2 p, const CarvePatternParams &params)
   const float varf = std::clamp(params.variation, 0.0f, 1.0f) / 0.5f;
   s.rh *= rowf;
   s.ln *= lenf;
+  if (tiling.on()) {
+    /* For textures Row Height sizes the stones and Stone Length is their shape. */
+    s.ln *= rowf;
+  }
   s.size *= lenf;
   s.unit *= lenf;
   s.mortar *= mortf;
@@ -532,6 +655,37 @@ static float wall(const float2 p, const CarvePatternParams &params)
   s.tilt *= varf;
   s.jitter = std::min(s.jitter * varf, 1.0f);
   s.weight *= varf;
+
+  s.tiling = tiling;
+  if (tiling.on()) {
+    const float2 period = tiling.period;
+    switch (s.kind) {
+      case WallKind::Courses:
+        if (s.band > 0) {
+          /* Whole groups of courses with their band course; band courses are half again as
+           * tall, so a group is band + 0.5 course heights. */
+          const float b = float(s.band);
+          const float groups = Tiling::count(period.y, s.rh * (b + 0.5f));
+          s.rows = groups * b;
+          s.rh = period.y * b / (s.rows * (b + 0.5f));
+        }
+        else {
+          s.rows = Tiling::count(period.y, s.rh);
+          s.rh = period.y / s.rows;
+        }
+        break;
+      case WallKind::Cells:
+        s.cols = Tiling::count(period.x, s.size * s.stretch);
+        s.rows = Tiling::count(period.y, s.size);
+        s.cell = float2(period.x / s.cols, period.y / s.rows);
+        break;
+      case WallKind::Ashlar:
+        s.cols = Tiling::count(period.x, 2.0f * s.unit);
+        s.rows = Tiling::count(period.y, 2.0f * s.unit);
+        s.cell = float2(period.x / s.cols, period.y / s.rows);
+        break;
+    }
+  }
 
   WallNearest nearest;
   float rh = s.rh;
@@ -550,7 +704,7 @@ static float wall(const float2 p, const CarvePatternParams &params)
   }
 
   /* Joints open and close along their length. */
-  const float mortar = s.mortar * (0.5f + value_noise(p.x / rh * 1.3f, p.y / rh * 1.3f, 60.0f));
+  const float mortar = s.mortar * (0.5f + tiling.noise(p, 1.3f / rh, 60.0f));
   float ja = (nearest.d2 - nearest.d1) * 0.5f - mortar * 0.5f;
   float jb = (nearest.d3 - nearest.d1) * 0.5f - mortar * 0.5f;
   float id = nearest.id;
@@ -575,8 +729,22 @@ static float wall(const float2 p, const CarvePatternParams &params)
     /* Where stones leave a wide gap, show a little mortar pool. */
     inside = std::min(inside, -nearest.d1 + 0.6f * rh);
   }
+  if (r_id) {
+    *r_id = id;
+  }
   if (inside <= 0.0f) {
     return 0.0f;
+  }
+  if (tiling.on()) {
+    /* For textures: soft, domed stones of their own heights, with room to the top. */
+    const float roundness = std::clamp(params.roundness, 0.0f, 1.0f);
+    const float tb = std::min(inside / ((0.06f + 0.4f * roundness) * rh), 1.0f);
+    const float edge = tb * tb * (3.0f - 2.0f * tb);
+    const float uv2 = std::min(nearest.u * nearest.u + nearest.v * nearest.v, 2.0f);
+    float top = (1.0f - (0.1f + 0.25f * roundness) * uv2 * 0.5f) *
+                (1.0f - s.depth * hash3(id * 3.0f, 1.0f, 21.0f));
+    top += std::max(params.roughness, 0.0f) * 0.25f * (tiling.fbm(p, 4.0f / rh, 24.0f, 4) - 0.5f);
+    return std::clamp(0.9f * edge * top, 0.0f, 1.0f);
   }
   const float bevel = 0.18f * rh;
   const float t = std::min(inside / bevel, 1.0f);
@@ -584,15 +752,15 @@ static float wall(const float2 p, const CarvePatternParams &params)
   const float uv2 = nearest.u * nearest.u + nearest.v * nearest.v;
   float face = (1.0f - s.bulge * 0.4f * std::clamp(uv2, 0.0f, 2.0f)) *
                (1.0f - s.depth * hash3(id * 3.0f, 1.0f, 21.0f));
-  face += std::max(params.roughness, 0.0f) * 0.08f *
-          (value_fbm_octaves(p.x / rh * 6.0f, p.y / rh * 6.0f, 24.0f, 4) - 0.5f);
+  face += std::max(params.roughness, 0.0f) * 0.08f * (tiling.fbm(p, 6.0f / rh, 24.0f, 4) - 0.5f);
   return std::clamp(shoulder * std::clamp(face, 0.0f, 1.3f), 0.0f, 1.0f);
 }
 
 /** \} */
 
-/** Fitted and packed walls, in mesh_carve_layout.cc. */
-float carve_layout_wall(float2 p, const CarvePatternParams &params);
+/** Fitted and packed walls, in mesh_carve_layout.cc. With a period above zero, \a p is read
+ * over a square of that size which repeats. */
+float carve_layout_wall(float2 p, const CarvePatternParams &params, float2 period, float *r_id);
 
 static float voronoi_stones(const float3 p, const CarvePatternParams &params)
 {
@@ -664,7 +832,7 @@ float carve_pattern_value(const CarvePatternParams &params,
     case CarvePattern::Rubble:
     case CarvePattern::Cobblestone:
     case CarvePattern::Ashlar:
-      return wall(p2, params);
+      return wall(p2, params, Tiling(), nullptr);
     case CarvePattern::FittedRubble:
     case CarvePattern::RoughCourses:
     case CarvePattern::SquaredStone:
@@ -678,9 +846,9 @@ float carve_pattern_value(const CarvePatternParams &params,
     case CarvePattern::PackedWedges:
     case CarvePattern::PackedMixed:
     case CarvePattern::DryWall:
-      return carve_layout_wall(p2, params);
+      return carve_layout_wall(p2, params, float2(0.0f), nullptr);
     case CarvePattern::Bricks:
-      return stone_wall(p2, params, true);
+      return stone_wall(p2, params, true, Tiling(), nullptr);
     case CarvePattern::Waves: {
       float s = p2.x;
       if (params.distortion != 0.0f) {
@@ -696,6 +864,52 @@ float carve_pattern_value(const CarvePatternParams &params,
     }
   }
   return 0.0f;
+}
+
+CarvePatternSample carve_pattern_tiled(const CarvePatternParams &params, const float2 uv)
+{
+  Tiling tiling;
+  tiling.period = float2(std::max(params.scale, 1e-3f));
+  if (params.seed != 0) {
+    const float3 offset = noise::hash_float_to_float3(float(params.seed)) * 1000.0f;
+    tiling.seed = float2(std::round(offset.x), std::round(offset.y));
+  }
+  const float2 p = uv * tiling.period;
+  CarvePatternSample sample;
+  switch (params.pattern) {
+    case CarvePattern::RandomStone:
+    case CarvePattern::CoursedBlocks:
+    case CarvePattern::Slate:
+    case CarvePattern::DryStone:
+    case CarvePattern::Banded:
+    case CarvePattern::Fieldstone:
+    case CarvePattern::Rubble:
+    case CarvePattern::Cobblestone:
+    case CarvePattern::Ashlar:
+      sample.height = wall(p, params, tiling, &sample.id);
+      break;
+    case CarvePattern::Bricks:
+      sample.height = stone_wall(p, params, true, tiling, &sample.id);
+      break;
+    case CarvePattern::FittedRubble:
+    case CarvePattern::RoughCourses:
+    case CarvePattern::SquaredStone:
+    case CarvePattern::MixedRubble:
+    case CarvePattern::WornStone:
+    case CarvePattern::ThinCourses:
+    case CarvePattern::PackedRound:
+    case CarvePattern::PackedAngular:
+    case CarvePattern::PackedBlocks:
+    case CarvePattern::PackedSlabs:
+    case CarvePattern::PackedWedges:
+    case CarvePattern::PackedMixed:
+    case CarvePattern::DryWall:
+      sample.height = carve_layout_wall(p, params, tiling.period, &sample.id);
+      break;
+    default:
+      break;
+  }
+  return sample;
 }
 
 /** \} */

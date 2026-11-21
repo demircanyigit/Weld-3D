@@ -14,11 +14,17 @@
 
 #include "BLI_utildefines.h"
 
+#include "BLI_bounds.hh"
+#include "BLI_index_mask.hh"
+#include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
 #include "BLI_span.hh"
 
 #include "BLT_translation.hh"
+
+#include "BLI_listbase_iterator.hh"
 
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -29,6 +35,8 @@
 #include "BKE_attribute_legacy_convert.hh"
 #include "BKE_curve.hh"
 #include "BKE_customdata.hh"
+#include "BKE_geometry_set.hh"
+#include "BKE_instances.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
@@ -44,10 +52,14 @@
 #include "RNA_prototypes.hh"
 
 #include "MOD_ui_common.hh"
+#include "MOD_util.hh"
+
+#include "BLO_read_write.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "GEO_mesh_merge_by_distance.hh"
+#include "GEO_realize_instances.hh"
 
 namespace blender {
 
@@ -69,6 +81,37 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
   walk(user_data, ob, reinterpret_cast<ID **>(&amd->end_cap), IDWALK_CB_NOP);
   walk(user_data, ob, reinterpret_cast<ID **>(&amd->curve_ob), IDWALK_CB_NOP);
   walk(user_data, ob, reinterpret_cast<ID **>(&amd->offset_ob), IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&amd->collection), IDWALK_CB_USER);
+  for (ArraySourceObject &item : amd->objects) {
+    walk(user_data, ob, reinterpret_cast<ID **>(&item.object), IDWALK_CB_NOP);
+  }
+}
+
+static void free_data(ModifierData *md)
+{
+  ArrayModifierData *amd = reinterpret_cast<ArrayModifierData *>(md);
+  BLI_freelistN(&amd->objects);
+}
+
+static void copy_data(const ModifierData *md, ModifierData *target, const int flag)
+{
+  BKE_modifier_copydata_generic(md, target, flag);
+  const ArrayModifierData *src = reinterpret_cast<const ArrayModifierData *>(md);
+  ArrayModifierData *dst = reinterpret_cast<ArrayModifierData *>(target);
+  BLI_duplicatelist(&dst->objects, &src->objects);
+}
+
+static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const ModifierData *md)
+{
+  const ArrayModifierData *amd = reinterpret_cast<const ArrayModifierData *>(md);
+  writer->write_struct(amd);
+  writer->write_struct_list(&amd->objects);
+}
+
+static void blend_read(BlendDataReader *reader, ModifierData *md)
+{
+  ArrayModifierData *amd = reinterpret_cast<ArrayModifierData *>(md);
+  BLO_read_struct_list(reader, ArraySourceObject, &amd->objects);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -97,6 +140,8 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
   if (need_transform_dependency) {
     DEG_add_depends_on_transform_relation(ctx->node, "Array Modifier");
   }
+  MOD_array_source_update_depsgraph(
+      ctx, amd->source, amd->collection, amd->objects, "Array Modifier Source");
 }
 
 BLI_INLINE float sum_v3(const float v[3])
@@ -374,6 +419,112 @@ static void mesh_merge_transform(Mesh *result,
   }
 }
 
+/** The transform from one copy to the next, accumulating all offset settings. */
+static void array_offset(const ArrayModifierData *amd,
+                         const ModifierEvalContext *ctx,
+                         const std::optional<Bounds<float3>> &bounds,
+                         float r_offset[4][4])
+{
+  unit_m4(r_offset);
+
+  if (amd->offset_type & MOD_ARR_OFF_CONST) {
+    add_v3_v3(r_offset[3], amd->offset);
+  }
+
+  if ((amd->offset_type & MOD_ARR_OFF_RELATIVE) && bounds) {
+    for (int j = 3; j--;) {
+      r_offset[3][j] += amd->scale[j] * (bounds->max[j] - bounds->min[j]);
+    }
+  }
+
+  if ((amd->offset_type & MOD_ARR_OFF_OBJ) && amd->offset_ob != nullptr) {
+    float obinv[4][4];
+    float result_mat[4][4];
+
+    if (ctx->object) {
+      invert_m4_m4(obinv, ctx->object->object_to_world().ptr());
+    }
+    else {
+      unit_m4(obinv);
+    }
+
+    mul_m4_series(result_mat, r_offset, obinv, amd->offset_ob->object_to_world().ptr());
+    copy_m4_m4(r_offset, result_mat);
+  }
+}
+
+/**
+ * The number of copies, from the fit type, limited to a sane amount of geometry.
+ * \param chunk_nverts: The most points one copy can have.
+ */
+static int array_count(ArrayModifierData *amd,
+                       const ModifierEvalContext *ctx,
+                       const float offset[4][4],
+                       const size_t chunk_nverts,
+                       const size_t caps_nverts)
+{
+  int count = amd->count;
+  float length = amd->length;
+
+  if (amd->fit_type == MOD_ARR_FITCURVE && amd->curve_ob != nullptr) {
+    Object *curve_ob = amd->curve_ob;
+    CurveCache *curve_cache = curve_ob->runtime->curve_cache;
+    if (curve_cache != nullptr && curve_cache->anim_path_accum_length != nullptr) {
+      float scale_fac = mat4_to_scale(curve_ob->object_to_world().ptr());
+      length = scale_fac * BKE_anim_path_get_length(curve_cache);
+    }
+  }
+
+  /* About 67 million vertices max seems a decent limit for now. */
+  const size_t max_verts_num = 1 << 26;
+
+  /* calculate the maximum number of copies which will fit within the
+   * prescribed length */
+  if (ELEM(amd->fit_type, MOD_ARR_FITLENGTH, MOD_ARR_FITCURVE)) {
+    const float float_epsilon = 1e-6f;
+    bool offset_is_too_small = false;
+    float dist = len_v3(offset[3]);
+
+    if (dist > float_epsilon) {
+      /* this gives length = first copy start to last copy end
+       * add a tiny offset for floating point rounding errors */
+      count = (length + float_epsilon) / dist + 1;
+
+      /* Ensure we keep things to a reasonable level, in terms of rough total amount of generated
+       * vertices.
+       */
+      if ((size_t(count) * chunk_nverts + caps_nverts) > max_verts_num) {
+        count = 1;
+        offset_is_too_small = true;
+      }
+    }
+    else {
+      /* if the offset has no translation, just make one copy */
+      count = 1;
+      offset_is_too_small = true;
+    }
+
+    if (offset_is_too_small) {
+      BKE_modifier_set_error(
+          ctx->object,
+          &amd->modifier,
+          "The offset is too small, we cannot generate the amount of geometry it would require");
+    }
+  }
+  /* Ensure we keep things to a reasonable level, in terms of rough total amount of generated
+   * vertices.
+   */
+  else if ((size_t(count) * chunk_nverts + caps_nverts) > max_verts_num) {
+    count = 1;
+    BKE_modifier_set_error(ctx->object,
+                           &amd->modifier,
+                           "The amount of copies is too high, we cannot generate the amount of "
+                           "geometry it would require");
+  }
+
+  return std::max(count, 1);
+}
+
 static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
                                    const ModifierEvalContext *ctx,
                                    Mesh *mesh)
@@ -384,8 +535,7 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
    * see: #107353, #132991. */
 
   int2 *edge;
-  int i, j, c, count;
-  float length = amd->length;
+  int i, c, count;
   /* offset matrix */
   float offset[4][4];
   float scale[3];
@@ -397,7 +547,6 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
 
   const bool use_merge = (amd->flags & MOD_ARR_MERGE) != 0;
   const bool use_recalc_normals = BKE_mesh_vert_normals_are_dirty(mesh) || use_merge;
-  const bool use_offset_ob = ((amd->offset_type & MOD_ARR_OFF_OBJ) && amd->offset_ob != nullptr);
 
   int start_cap_nverts = 0, start_cap_nedges = 0, start_cap_nfaces = 0, start_cap_nloops = 0;
   int end_cap_nverts = 0, end_cap_nedges = 0, end_cap_nfaces = 0, end_cap_nloops = 0;
@@ -416,8 +565,6 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
   chunk_nedges = mesh->edges_num;
   chunk_nloops = mesh->corners_num;
   chunk_nfaces = mesh->faces_num;
-
-  count = amd->count;
 
   Object *start_cap_ob = amd->start_cap;
   if (start_cap_ob && start_cap_ob != ctx->object) {
@@ -453,100 +600,13 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
   }
 
   /* Build up offset array, accumulating all settings options. */
-
-  unit_m4(offset);
-
-  if (amd->offset_type & MOD_ARR_OFF_CONST) {
-    add_v3_v3(offset[3], amd->offset);
-  }
-
-  if (amd->offset_type & MOD_ARR_OFF_RELATIVE) {
-    const Bounds<float3> bounds = *mesh->bounds_min_max();
-    for (j = 3; j--;) {
-      offset[3][j] += amd->scale[j] * (bounds.max[j] - bounds.min[j]);
-    }
-  }
-
-  if (use_offset_ob) {
-    float obinv[4][4];
-    float result_mat[4][4];
-
-    if (ctx->object) {
-      invert_m4_m4(obinv, ctx->object->object_to_world().ptr());
-    }
-    else {
-      unit_m4(obinv);
-    }
-
-    mul_m4_series(result_mat, offset, obinv, amd->offset_ob->object_to_world().ptr());
-    copy_m4_m4(offset, result_mat);
-  }
+  array_offset(amd, ctx, mesh->bounds_min_max(), offset);
 
   /* Check if there is some scaling. If scaling, then we will not translate mapping */
   mat4_to_size(scale, offset);
   offset_has_scale = !is_one_v3(scale);
 
-  if (amd->fit_type == MOD_ARR_FITCURVE && amd->curve_ob != nullptr) {
-    Object *curve_ob = amd->curve_ob;
-    CurveCache *curve_cache = curve_ob->runtime->curve_cache;
-    if (curve_cache != nullptr && curve_cache->anim_path_accum_length != nullptr) {
-      float scale_fac = mat4_to_scale(curve_ob->object_to_world().ptr());
-      length = scale_fac * BKE_anim_path_get_length(curve_cache);
-    }
-  }
-
-  /* About 67 million vertices max seems a decent limit for now. */
-  const size_t max_verts_num = 1 << 26;
-
-  /* calculate the maximum number of copies which will fit within the
-   * prescribed length */
-  if (ELEM(amd->fit_type, MOD_ARR_FITLENGTH, MOD_ARR_FITCURVE)) {
-    const float float_epsilon = 1e-6f;
-    bool offset_is_too_small = false;
-    float dist = len_v3(offset[3]);
-
-    if (dist > float_epsilon) {
-      /* this gives length = first copy start to last copy end
-       * add a tiny offset for floating point rounding errors */
-      count = (length + float_epsilon) / dist + 1;
-
-      /* Ensure we keep things to a reasonable level, in terms of rough total amount of generated
-       * vertices.
-       */
-      if ((size_t(count) * size_t(chunk_nverts) + size_t(start_cap_nverts) +
-           size_t(end_cap_nverts)) > max_verts_num)
-      {
-        count = 1;
-        offset_is_too_small = true;
-      }
-    }
-    else {
-      /* if the offset has no translation, just make one copy */
-      count = 1;
-      offset_is_too_small = true;
-    }
-
-    if (offset_is_too_small) {
-      BKE_modifier_set_error(
-          ctx->object,
-          &amd->modifier,
-          "The offset is too small, we cannot generate the amount of geometry it would require");
-    }
-  }
-  /* Ensure we keep things to a reasonable level, in terms of rough total amount of generated
-   * vertices.
-   */
-  else if ((size_t(count) * size_t(chunk_nverts) + size_t(start_cap_nverts) +
-            size_t(end_cap_nverts)) > max_verts_num)
-  {
-    count = 1;
-    BKE_modifier_set_error(ctx->object,
-                           &amd->modifier,
-                           "The amount of copies is too high, we cannot generate the amount of "
-                           "geometry it would require");
-  }
-
-  count = std::max(count, 1);
+  count = array_count(amd, ctx, offset, chunk_nverts, start_cap_nverts + end_cap_nverts);
 
   /* The number of verts, edges, loops, faces, before eventually merging doubles */
   result_nverts = chunk_nverts * count + start_cap_nverts + end_cap_nverts;
@@ -863,9 +923,139 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
   return result;
 }
 
+/**
+ * Copies made of other objects' meshes, one picked for each copy by #ArrayModifierData.pick.
+ * The meshes are placed as they are in their own object, without the object's transform.
+ * Merging joins close points anywhere in the result, not only between neighboring copies.
+ */
+static Mesh *array_from_meshes(ArrayModifierData *amd,
+                               const ModifierEvalContext *ctx,
+                               Mesh *mesh,
+                               const Span<const Mesh *> meshes)
+{
+  /* The copies are spaced by the size of all meshes they can be made of. */
+  std::optional<Bounds<float3>> size;
+  size_t chunk_nverts = 0;
+  auto add_size = [&](const Mesh &copy) {
+    size = bounds::merge(size, copy.bounds_min_max());
+    chunk_nverts = std::max(chunk_nverts, size_t(copy.verts_num));
+  };
+  for (const Mesh *copy : meshes) {
+    add_size(*copy);
+  }
+  if (amd->pick == MOD_ARRAY_PICK_ALTERNATE) {
+    add_size(*mesh);
+  }
+
+  auto cap_mesh = [&](Object *cap_ob) -> const Mesh * {
+    if (cap_ob == nullptr || cap_ob == ctx->object) {
+      return nullptr;
+    }
+    Mesh *cap = BKE_modifier_get_evaluated_mesh_from_evaluated_object(cap_ob);
+    if (cap != nullptr) {
+      BKE_mesh_wrapper_ensure_mdata(cap);
+    }
+    return cap;
+  };
+  const Mesh *start_cap = cap_mesh(amd->start_cap);
+  const Mesh *end_cap = cap_mesh(amd->end_cap);
+  const size_t caps_nverts = (start_cap ? size_t(start_cap->verts_num) : 0) +
+                             (end_cap ? size_t(end_cap->verts_num) : 0);
+
+  float offset[4][4];
+  array_offset(amd, ctx, size, offset);
+  const int count = array_count(amd, ctx, offset, chunk_nverts, caps_nverts);
+  const Array<int> picks = MOD_array_source_pick(amd->pick, amd->seed, count, int(meshes.size()));
+
+  const int caps_num = (start_cap ? 1 : 0) + (end_cap ? 1 : 0);
+  std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>(count + caps_num);
+  /* The meshes are only read. */
+  auto add_reference = [&](const Mesh &copy) {
+    return instances->add_reference(bke::InstanceReference{bke::GeometrySet::from_mesh(
+        const_cast<Mesh *>(&copy), bke::GeometryOwnershipType::ReadOnly)});
+  };
+  const int own_handle = add_reference(*mesh);
+  Array<int> mesh_handles(meshes.size());
+  for (const int i : meshes.index_range()) {
+    mesh_handles[i] = add_reference(*meshes[i]);
+  }
+
+  MutableSpan<int> handles = instances->reference_handles_for_write();
+  MutableSpan<float4x4> transforms = instances->transforms_for_write();
+  const float4x4 step(offset);
+  float4x4 current = float4x4::identity();
+  for (const int c : IndexRange(count)) {
+    handles[c] = picks[c] < 0 ? own_handle : mesh_handles[picks[c]];
+    transforms[c] = current;
+    current = current * step;
+  }
+  /* The caps go last, like in the copies of the mesh itself. */
+  int cap_index = count;
+  if (start_cap) {
+    handles[cap_index] = add_reference(*start_cap);
+    transforms[cap_index] = math::invert(step);
+    cap_index++;
+  }
+  if (end_cap) {
+    handles[cap_index] = add_reference(*end_cap);
+    transforms[cap_index] = current;
+  }
+
+  geometry::RealizeInstancesOptions options;
+  options.keep_original_ids = false;
+  options.realize_instance_attributes = false;
+  bke::GeometrySet realized =
+      geometry::realize_instances(bke::GeometrySet::from_instances(std::move(instances)), options)
+          .geometry;
+  Mesh *result = realized.get_component_for_write<bke::MeshComponent>().release();
+  if (result == nullptr) {
+    return mesh;
+  }
+
+  /* The corners of the copies come one copy after another, in order. */
+  if (!is_zero_v2(amd->uv_offset)) {
+    bke::MutableAttributeAccessor attributes = result->attributes_for_write();
+    for (const StringRefNull name : result->uv_map_names()) {
+      bke::SpanAttributeWriter<float2> uv_map = attributes.lookup_for_write_span<float2>(name);
+      if (!uv_map) {
+        continue;
+      }
+      int corner_start = 0;
+      for (const int c : IndexRange(count)) {
+        const Mesh &copy = picks[c] < 0 ? *mesh : *meshes[picks[c]];
+        const float2 uv_offset = float2(amd->uv_offset) * float(c);
+        for (float2 &uv : uv_map.span.slice(corner_start, copy.corners_num)) {
+          uv += uv_offset;
+        }
+        corner_start += copy.corners_num;
+      }
+      uv_map.finish();
+    }
+  }
+
+  if ((amd->flags & MOD_ARR_MERGE) && count + caps_num > 1) {
+    if (std::optional<Mesh *> merged = geometry::mesh_merge_by_distance_all(
+            *result, IndexMask(result->verts_num), amd->merge_dist))
+    {
+      BKE_id_free(nullptr, result);
+      result = *merged;
+    }
+  }
+
+  result->runtime->edit_mesh = mesh->runtime->edit_mesh;
+  return result;
+}
+
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   ArrayModifierData *amd = reinterpret_cast<ArrayModifierData *>(md);
+  /* Other objects in place of the mesh, when there are any. */
+  Vector<bke::GeometrySet> keep;
+  const Vector<const Mesh *> meshes = MOD_array_source_meshes(
+      amd->source, amd->collection, amd->objects, ctx->object, keep);
+  if (!meshes.is_empty()) {
+    return array_from_meshes(amd, ctx, mesh, meshes);
+  }
   return arrayModifier_doArray(amd, ctx, mesh);
 }
 
@@ -900,6 +1090,8 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   layout.use_property_split_set(true);
+
+  modifier_array_source_draw(layout, ptr);
 
   layout.prop(ptr, "fit_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -1074,7 +1266,7 @@ ModifierTypeInfo modifierType_Array = {
         eModifierTypeFlag_AcceptsCVs,
     /*icon*/ ICON_MOD_ARRAY,
 
-    /*copy_data*/ BKE_modifier_copydata_generic,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
@@ -1085,7 +1277,7 @@ ModifierTypeInfo modifierType_Array = {
 
     /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ nullptr,
+    /*free_data*/ free_data,
     /*is_disabled*/ is_disabled,
     /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
@@ -1094,8 +1286,8 @@ ModifierTypeInfo modifierType_Array = {
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,
-    /*blend_write*/ nullptr,
-    /*blend_read*/ nullptr,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
 };

@@ -499,7 +499,7 @@ void node_group_declare(NodeDeclarationBuilder &b)
   group->ensure_interface_cache();
 
   Map<const bNodeTreeInterfaceSocket *, StructureType> structure_type_by_socket;
-  if (ELEM(group->type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
+  if (ELEM(group->type, NTREE_GEOMETRY, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
     structure_type_by_socket.reserve(group->interface_items().size());
 
     const Span<const bNodeTreeInterfaceSocket *> inputs = group->interface_inputs();
@@ -995,6 +995,7 @@ bNodeSocket *node_group_output_find_socket(bNode *node, const StringRef identifi
 
 static void get_compositor_group_output_extra_info(blender::nodes::NodeExtraInfoParams &parameters)
 {
+  /* Texture Graphs use every output, so these checks are compositor only. */
   if (parameters.tree.type != NTREE_COMPOSIT) {
     return;
   }

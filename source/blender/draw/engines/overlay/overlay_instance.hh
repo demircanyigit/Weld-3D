@@ -27,6 +27,7 @@
 #include "overlay_force_field.hh"
 #include "overlay_grease_pencil.hh"
 #include "overlay_grid.hh"
+#include "overlay_group.hh"
 #include "overlay_lattice.hh"
 #include "overlay_light.hh"
 #include "overlay_lightprobe.hh"
@@ -71,6 +72,8 @@ class Instance : public DrawEngine {
   Origins origins = {selection_type_};
   Outline outline;
   MotionPath motion_paths;
+  /** Weld 3D: dashed box around groups. */
+  GroupBounds group_bounds = {selection_type_};
   Cursor cursor;
 
   struct OverlayLayer {

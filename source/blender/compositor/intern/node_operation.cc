@@ -47,6 +47,20 @@ NodeOperation::NodeOperation(Context &context, const bNode &node) : Operation(co
 
 void NodeOperation::evaluate()
 {
+  /* Nothing changed since this node last ran: use what it made then, and keep its preview. */
+  if (this->context().load_node_results(this->node(), *this)) {
+    if (node_previews_ && !node_previews_->contains(instance_key_)) {
+      this->make_preview();
+    }
+    else if (preview_only_result_) {
+      preview_only_result_->release();
+      preview_only_result_ = nullptr;
+    }
+    this->release_inputs();
+    this->context().evaluate_operation_post();
+    return;
+  }
+
   if (this->context().use_gpu()) {
     GPU_debug_group_begin(this->node().typeinfo->idname.c_str());
   }
@@ -73,6 +87,20 @@ void NodeOperation::compute_results_reference_counts(const VectorSet<const bNode
 
     this->get_result(output->identifier).set_reference_count(reference_count);
   }
+
+  /* A node with no linked outputs is only computed for its preview, so compute its preview output
+   * with an extra reference that is released once the preview is made. */
+  preview_only_result_ = nullptr;
+  if (node_previews_) {
+    const bNodeSocket *preview_output = find_preview_output_socket(this->node());
+    if (preview_output) {
+      Result &result = this->get_result(preview_output->identifier);
+      if (!result.should_compute()) {
+        result.set_reference_count(1);
+        preview_only_result_ = &result;
+      }
+    }
+  }
 }
 
 void NodeOperation::set_instance_key(const bNodeInstanceKey &instance_key)
@@ -97,11 +125,22 @@ Map<bNodeInstanceKey, bke::bNodePreview> *NodeOperation::get_node_previews()
 
 void NodeOperation::compute_preview()
 {
+  /* Right after the node ran, before the output only made for the preview is released. */
+  this->context().store_node_results(this->node(), *this);
+  this->make_preview();
+}
+
+void NodeOperation::make_preview()
+{
   if (node_previews_ && is_node_preview_needed(this->node())) {
     const Result *result = get_preview_result();
     if (result) {
       compositor::compute_preview(context(), node_previews_, this->get_instance_key(), *result);
     }
+  }
+  if (preview_only_result_) {
+    preview_only_result_->release();
+    preview_only_result_ = nullptr;
   }
 }
 

@@ -594,6 +594,9 @@ static void noise_deform_declare(NodeDeclarationBuilder &b)
       .default_value({0.0f, 0.0f, 0.2f})
       .subtype(PROP_TRANSLATION)
       .description("Largest move on X, Y and Z");
+  b.add_input<decl::Float>("Uniform Strength")
+      .default_value(1.0f)
+      .description("Multiplies the strength on all axes at once");
   b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0001f).description(
       "Size of the noise pattern");
   b.add_input<decl::Float>("Phase").description("Moves through the noise. Animate it for motion");
@@ -610,7 +613,8 @@ static void noise_deform_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const Field<float> weight_field = params.extract_input<Field<float>>("Weight");
   geometry::NoiseDeformParams np;
-  np.strength = params.extract_input<float3>("Strength");
+  np.strength = params.extract_input<float3>("Strength") *
+                params.extract_input<float>("Uniform Strength");
   np.scale = params.extract_input<float>("Scale");
   np.phase = params.extract_input<float>("Phase");
   np.seed = params.extract_input<int>("Seed");

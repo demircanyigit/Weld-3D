@@ -159,6 +159,9 @@ menu_path_icons = {
     "Utilities/Vector": 'EMPTY_ARROWS',
     "Group": 'NODETREE',
     "Layout": 'OPTIONS',
+    "Tree": 'NODE_TREE_GRAPH',
+    "Shape": 'NODE_TREE_FORCE',
+    "Surface": 'NODE_TREE_BARK',
 }
 # Sub-menus found in several categories, shown with the same icon in each.
 menu_name_icons = {
@@ -214,7 +217,7 @@ class NodeMenu(Menu):
             # Geometry nodes that do a modeling operation share its (recolored) icon.
             # Not every result of `bl_rna_get_subclass` is a struct definition with an `icon`.
             icon = getattr(bl_rna, "icon", "")
-            if not (isinstance(icon, str) and icon.startswith(("GEO_", "MOD_"))):
+            if not (isinstance(icon, str) and icon.startswith(("GEO_", "MOD_", "NODE_TG_", "NODE_TREE_"))):
                 icon = cls.path_icon_for_nodes()
             props = layout.operator(
                 cls.main_operator_id,

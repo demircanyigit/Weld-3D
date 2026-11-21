@@ -168,6 +168,9 @@ struct GeoNodesModifierData {
   const Object *self_object = nullptr;
   /** Depsgraph that is evaluating the modifier. */
   Depsgraph *depsgraph = nullptr;
+  /** Esc presses counted when the modifier started; nodes stop running once it changes. */
+  uint64_t esc_presses = 0;
+  bool can_stop = false;
 };
 
 struct GeoNodesOperatorDepsgraphs {

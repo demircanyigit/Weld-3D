@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "BLI_array.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_listBase.h"
@@ -60,5 +62,16 @@ void MOD_collider_sources_blend_read(BlendDataReader *reader,
 
 /** The list in a modifier panel, with buttons to add objects, collections and the selection. */
 void MOD_collider_sources_draw(ui::Layout &layout, PointerRNA *ptr);
+
+/**
+ * The piece of each point, from an attribute, for Collapse and Lean. A face attribute first
+ * splits the mesh where faces of different pieces meet, so every point belongs to one piece; the
+ * split mesh is returned in `r_split` and must be used and freed by the caller. Returns false
+ * when there is no attribute.
+ */
+bool MOD_pieces_from_attribute(const Mesh &mesh,
+                               StringRef name,
+                               Mesh **r_split,
+                               Array<int> &r_pieces);
 
 }  // namespace blender

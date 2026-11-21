@@ -16,8 +16,12 @@ struct CryptomatteSession;
 struct Scene;
 
 extern bke::bNodeTreeType *ntreeType_Composite;
+extern bke::bNodeTreeType *ntreeType_TextureGraph;
+extern bke::bNodeTreeType *ntreeType_TreeGraph;
 
 void register_node_tree_type_cmp();
+void register_node_tree_type_texture_graph();
+void register_node_tree_type_tree_graph();
 void register_node_type_cmp_custom_group(bke::bNodeType *ntype);
 
 void node_cmp_rlayers_outputs(bNodeTree *ntree, bNode *node);

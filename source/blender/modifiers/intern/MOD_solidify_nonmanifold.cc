@@ -2162,6 +2162,12 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
                                                                      bke::AttrDomain::Face);
   bke::SpanAttributeWriter dst_material_index =
       result_attributes.lookup_or_add_for_write_span<int>("material_index", bke::AttrDomain::Face);
+  /* For Rim Shading: which faces are the rim. */
+  bke::SpanAttributeWriter<bool> rim_faces;
+  if (smd->rim_shading != MOD_SOLIDIFY_RIM_SHADING_KEEP) {
+    rim_faces = result_attributes.lookup_or_add_for_write_span<bool>(".solidify_rim",
+                                                                     bke::AttrDomain::Face);
+  }
 
   /* Make boundary edges/faces. */
   {
@@ -2335,6 +2341,9 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
                                                                        0 :
                                                                        mat_ofs_rim);
               CLAMP(dst_material_index.span[face_index], 0, mat_nr_max);
+              if (rim_faces && !g->is_orig_closed && do_rim) {
+                rim_faces.span[face_index] = true;
+              }
               face_index++;
 
               for (uint k = 0; g2->valid && k < j; g2++) {
@@ -2408,6 +2417,9 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
                                                    0) +
                                               mat_ofs_rim;
         CLAMP(dst_material_index.span[face_index], 0, mat_nr_max);
+        if (rim_faces) {
+          rim_faces.span[face_index] = true;
+        }
         face_index++;
 
         int loop1 = -1;
@@ -2685,6 +2697,9 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
 #undef MOD_SOLIDIFY_EMPTY_TAG
 
   dst_material_index.finish();
+  if (rim_faces) {
+    rim_faces.finish();
+  }
   result_edge_bweight.finish();
   result_edge_crease.finish();
 

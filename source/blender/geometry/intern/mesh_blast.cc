@@ -2,10 +2,15 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_attribute.hh"
+#include "BKE_bvhutils.hh"
 #include "BKE_mesh.hh"
 #include "BLI_array.hh"
+#include "BLI_bounds.hh"
 #include "BLI_disjoint_set.hh"
+#include "BLI_kdopbvh.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_noise.hh"
 #include "DNA_mesh_types.h"
 #include "GEO_mesh_blast.hh"
 #include "GEO_mesh_copy_selection.hh"
@@ -30,6 +35,184 @@ struct Island {
     measure = next;
   }
 };
+/** True when the point, in the space of the volume mesh, is inside it. */
+bool point_inside(const bke::BVHTreeFromMesh &bvh, const float3 &point)
+{
+  BVHTreeNearest nearest;
+  nearest.index = -1;
+  nearest.dist_sq = FLT_MAX;
+  BLI_bvhtree_find_nearest(bvh.tree,
+                           point,
+                           &nearest,
+                           bvh.nearest_callback,
+                           const_cast<bke::BVHTreeFromMesh *>(&bvh));
+  if (nearest.index == -1) {
+    return false;
+  }
+  return math::dot(point - float3(nearest.co), float3(nearest.no)) < 0.0f;
+}
+
+/** The islands the selection modes remove, by island. */
+Array<bool> select_islands(const Mesh &mesh,
+                           const MeshBlastParams &params,
+                           const Span<int> vertex_island,
+                           const int islands_num,
+                           std::string &message)
+{
+  const Span<float3> positions = mesh.vert_positions();
+  Array<float3> center(islands_num, float3(0.0f));
+  Array<int> verts(islands_num, 0);
+  for (const int v : positions.index_range()) {
+    center[vertex_island[v]] += positions[v];
+    verts[vertex_island[v]]++;
+  }
+  for (const int i : IndexRange(islands_num)) {
+    center[i] /= float(std::max(verts[i], 1));
+  }
+  /* A random value per island that stays when other islands change. */
+  Array<float> random(islands_num);
+  for (const int i : IndexRange(islands_num)) {
+    random[i] = noise::hash_float_to_float(
+        float4(center[i].x, center[i].y, center[i].z, float(params.seed) * 1.618f));
+  }
+  Array<bool> removed(islands_num, false);
+  const auto by_value = [&](const Span<float> value) {
+    for (const int i : IndexRange(islands_num)) {
+      const float v = value[i] + params.randomness * (random[i] * 2.0f - 1.0f);
+      removed[i] = v >= params.amount;
+    }
+  };
+  switch (params.select) {
+    case BlastSelect::Size:
+      break;
+    case BlastSelect::Random:
+      for (const int i : IndexRange(islands_num)) {
+        removed[i] = random[i] < params.amount;
+      }
+      break;
+    case BlastSelect::Inside: {
+      if (params.volume == nullptr || params.volume->faces_num == 0) {
+        message = "Choose a mesh object for the volume";
+        break;
+      }
+      const bke::BVHTreeFromMesh bvh = params.volume->bvh_corner_tris();
+      if (bvh.tree == nullptr) {
+        break;
+      }
+      const float4x4 to_volume = math::invert(params.volume_transform);
+      if (params.inside == BlastInside::Center) {
+        for (const int i : IndexRange(islands_num)) {
+          removed[i] = point_inside(bvh, math::transform_point(to_volume, center[i]));
+        }
+        break;
+      }
+      Array<int> inside(islands_num, 0);
+      for (const int v : positions.index_range()) {
+        if (point_inside(bvh, math::transform_point(to_volume, positions[v]))) {
+          inside[vertex_island[v]]++;
+        }
+      }
+      for (const int i : IndexRange(islands_num)) {
+        removed[i] = params.inside == BlastInside::Any ? inside[i] > 0 :
+                                                         inside[i] == verts[i] && verts[i] > 0;
+      }
+      break;
+    }
+    case BlastSelect::Gradient: {
+      Array<float> value(islands_num, 0.0f);
+      float3 origin(0.0f);
+      float3 axis(0.0f, 0.0f, 1.0f);
+      float distance = std::max(params.distance, 1e-6f);
+      float start = 0.0f;
+      if (params.use_gradient_object) {
+        origin = params.gradient_transform.location();
+        axis = math::normalize(params.gradient_transform.z_axis());
+      }
+      else if (const std::optional<Bounds<float3>> bounds = mesh.bounds_min_max()) {
+        if (params.gradient == BlastGradient::Linear) {
+          start = bounds->min.z;
+          distance = std::max(bounds->max.z - bounds->min.z, 1e-6f);
+        }
+        else {
+          origin = (bounds->min + bounds->max) * 0.5f;
+          distance = std::max(math::length(bounds->max - bounds->min) * 0.5f, 1e-6f);
+        }
+      }
+      for (const int i : IndexRange(islands_num)) {
+        if (params.gradient == BlastGradient::Linear) {
+          value[i] = params.use_gradient_object ? math::dot(center[i] - origin, axis) / distance :
+                                                  (center[i].z - start) / distance;
+        }
+        else {
+          value[i] = 1.0f - math::distance(center[i], origin) / distance;
+        }
+      }
+      by_value(value);
+      break;
+    }
+    case BlastSelect::Noise: {
+      Array<float> value(islands_num);
+      const float3 offset = float3(13.7f, 31.1f, 7.3f) * float(params.seed % 10000);
+      for (const int i : IndexRange(islands_num)) {
+        value[i] = noise::perlin(center[i] * params.noise_scale + offset);
+      }
+      by_value(value);
+      break;
+    }
+    case BlastSelect::Attribute: {
+      const VArraySpan<float> attribute = *mesh.attributes().lookup<float>(
+          params.attribute, bke::AttrDomain::Point);
+      if (attribute.is_empty()) {
+        message = "The mesh has no point attribute \"" + params.attribute + "\"";
+        break;
+      }
+      Array<float> value(islands_num, 0.0f);
+      for (const int v : positions.index_range()) {
+        value[vertex_island[v]] += attribute[v];
+      }
+      for (const int i : IndexRange(islands_num)) {
+        value[i] /= float(std::max(verts[i], 1));
+      }
+      by_value(value);
+      break;
+    }
+  }
+  return removed;
+}
+
+/** The mesh as it is, with the islands that would be removed stored in an attribute. */
+Mesh *mark_removed(const Mesh &mesh, const Span<bool> keep, const std::string &name)
+{
+  const std::string attribute_name = name.empty() ? std::string("blasted") : name;
+  Mesh *result = BKE_mesh_copy_for_eval(mesh);
+  bke::MutableAttributeAccessor attributes = result->attributes_for_write();
+  attributes.remove(attribute_name);
+  bke::SpanAttributeWriter<bool> marked = attributes.lookup_or_add_for_write_only_span<bool>(
+      attribute_name, bke::AttrDomain::Point);
+  if (marked) {
+    for (const int v : keep.index_range()) {
+      marked.span[v] = !keep[v];
+    }
+    marked.finish();
+  }
+  return result;
+}
+
+/** The mesh without the vertices that are not kept, an empty mesh when none are. */
+Mesh *keep_only(const Mesh &mesh, const Span<bool> keep)
+{
+  const std::optional<Mesh *> result = mesh_copy_selection(
+      mesh, VArray<bool>::from_span(keep), bke::AttrDomain::Point);
+  if (!result) {
+    return nullptr;
+  }
+  if (*result) {
+    return *result;
+  }
+  Mesh *empty = BKE_mesh_new_nomain(0, 0, 0, 0);
+  BKE_mesh_copy_parameters_for_eval(empty, &mesh);
+  return empty;
+}
 }  // namespace
 
 Mesh *mesh_blast(const Mesh &mesh, const MeshBlastParams &params, std::string &message)
@@ -79,6 +262,15 @@ Mesh *mesh_blast(const Mesh &mesh, const MeshBlastParams &params, std::string &m
           island.maximum[axis] = std::max(island.maximum[axis], double(point[axis]));
         }
       }
+    }
+    if (params.select != BlastSelect::Size) {
+      const Array<bool> removed = select_islands(
+          mesh, params, vertex_island, int(islands.size()), message);
+      Array<bool> keep(mesh.verts_num);
+      for (const int vertex : keep.index_range()) {
+        keep[vertex] = removed[vertex_island[vertex]] == params.invert;
+      }
+      return params.mark ? mark_removed(mesh, keep, params.mark_name) : keep_only(mesh, keep);
     }
     const bool volume = params.metric == BlastMetric::Volume;
     Array<int> edge_users, edge_orientation;
@@ -176,6 +368,9 @@ Mesh *mesh_blast(const Mesh &mesh, const MeshBlastParams &params, std::string &m
     if (protected_count) {
       message = "Volume filtering preserved " + std::to_string(protected_count) +
                 " open, non-manifold, inconsistently oriented or face-less islands";
+    }
+    if (params.mark) {
+      return mark_removed(mesh, keep_vertices, params.mark_name);
     }
     const std::optional<Mesh *> result = mesh_copy_selection(
         mesh, VArray<bool>::from_span(keep_vertices), bke::AttrDomain::Point);

@@ -86,8 +86,12 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
   if (amd->object != nullptr) {
     /* If not using envelopes,
      * create relations to individual bones for more rigging flexibility. */
+    /* Auto Weights and Transfer Weights add bone groups the mesh itself doesn't have. */
+    const bool groups_from_modifiers =
+        BKE_modifiers_findby_type(ctx->object, eModifierType_AutoWeights) ||
+        BKE_modifiers_findby_type(ctx->object, eModifierType_TransferWeights);
     if ((amd->deformflag & ARM_DEF_ENVELOPE) == 0 && (amd->object->pose != nullptr) &&
-        ELEM(ctx->object->type, OB_MESH, OB_LATTICE))
+        ELEM(ctx->object->type, OB_MESH, OB_LATTICE) && !groups_from_modifiers)
     {
       /* If neither vertex groups nor envelopes are used, the modifier has no bone dependencies. */
       if ((amd->deformflag & ARM_DEF_VGROUP) != 0) {

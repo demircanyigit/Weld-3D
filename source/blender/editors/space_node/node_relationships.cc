@@ -594,7 +594,8 @@ static bool is_viewer_socket(const bNodeSocket &socket)
 static int get_default_viewer_type(const bContext *C)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
-  return ED_node_is_compositor(snode) ? CMP_NODE_VIEWER : GEO_NODE_VIEWER;
+  return (ED_node_is_compositor(snode) || ED_node_is_texture_graph(snode)) ? CMP_NODE_VIEWER :
+                                                                            GEO_NODE_VIEWER;
 }
 
 static void remove_links_to_unavailable_viewer_sockets(bNodeTree &btree, bNode &viewer_node)
@@ -709,7 +710,7 @@ static void finalize_viewer_link(const bContext &C,
 
     viewer_path::activate_geometry_node(*bmain, snode, viewer_node, item_identifier);
   }
-  else if (snode.edittree->type == NTREE_COMPOSIT) {
+  else if (ELEM(snode.edittree->type, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH)) {
     for (bNode *node : snode.nodetree->all_nodes()) {
       if (node->is_type("CompositorNodeViewer") && node != &viewer_node) {
         node->flag &= ~NODE_DO_OUTPUT;
@@ -985,7 +986,7 @@ static bool node_active_link_viewer_poll(bContext *C)
     return false;
   }
   SpaceNode *snode = CTX_wm_space_node(C);
-  if (ED_node_is_compositor(snode)) {
+  if (ED_node_is_compositor(snode) || ED_node_is_texture_graph(snode)) {
     return true;
   }
   if (ED_node_is_geometry(snode)) {

@@ -343,6 +343,8 @@ enum {
   BUT_NO_TEXT_PADDING = 1 << 6,
   /** Do not add the usual padding around preview image drawing, use the size of the button. */
   BUT_NO_PREVIEW_PADDING = 1 << 7,
+  /** Preview tiles: draw a built-in icon at its own pixel size (32 pixels at a UI scale of 1). */
+  BUT_ICON_NATIVE_SIZE = 1 << 8,
 
   /* Button align flag, for drawing groups together.
    * Used in 'Block.flag', take care! */
@@ -667,6 +669,24 @@ using ButtonSearchContextMenuFn = bool (*)(bContext *C,
 using ButtonSearchTooltipFn =
     ARegion *(*)(bContext * C, ARegion *region, const rcti *item_rect, void *arg, void *active);
 using ButtonSearchListenFn = void (*)(const wmRegionListenerParams *params, void *arg);
+
+/** Per-row icon buttons drawn on the right side of a search list item. */
+enum SearchItemAction {
+  SEARCH_ITEM_ACTION_NONE = -1,
+  SEARCH_ITEM_ACTION_DUPLICATE = 0,
+  SEARCH_ITEM_ACTION_DELETE = 1,
+};
+constexpr int SEARCH_ITEM_ACTION_TOT = 2;
+/** Return true when `action` can be used on `item` (otherwise the icon is drawn disabled). */
+using ButtonSearchItemActionPollFn = bool (*)(const bContext *C,
+                                              void *arg,
+                                              void *item,
+                                              SearchItemAction action);
+/** Run `action` on `item`, return true when data changed and the list must refresh. */
+using ButtonSearchItemActionExecFn = bool (*)(bContext *C,
+                                              void *arg,
+                                              void *item,
+                                              SearchItemAction action);
 
 using BlockHandleFunc = void (*)(bContext *C, void *arg, int event);
 
@@ -1795,6 +1815,10 @@ void button_func_search_set(Button *but,
                             void *active);
 void button_func_search_set_context_menu(Button *but, ButtonSearchContextMenuFn context_menu_fn);
 void button_func_search_set_tooltip(Button *but, ButtonSearchTooltipFn tooltip_fn);
+/** Show duplicate/delete icons on every row of the search list (list view only). */
+void button_func_search_set_item_actions(Button *but,
+                                         ButtonSearchItemActionPollFn poll_fn,
+                                         ButtonSearchItemActionExecFn exec_fn);
 void button_func_search_set_listen(Button *but, ButtonSearchListenFn listen_fn);
 /**
  * \param search_sep_string: when not NULL, this string is used as a separator,
@@ -2433,6 +2457,21 @@ void template_color_ramp(Layout *layout, PointerRNA *ptr, StringRefNull propname
  * \param icon_scale: Scale of the icon, 1x == button height.
  */
 void template_icon(Layout *layout, int icon_value, float icon_scale);
+/**
+ * A tile with a node's icon at its own size and its name below, adding the node on click.
+ */
+void template_node_tile(Layout *layout,
+                        StringRefNull node_type,
+                        StringRef text,
+                        int icon,
+                        StringRef tooltip,
+                        float width,
+                        bool as_row);
+/**
+ * The categories of the node Library as a tree. Each line of \a items is a category:
+ * depth, path, name, icon and 1 for the category shown now, separated by tabs.
+ */
+void template_node_library_tree(Layout *layout, const bContext *C, StringRef items);
 /**
  * \param icon_scale: Scale of the icon, 1x == button height.
  */

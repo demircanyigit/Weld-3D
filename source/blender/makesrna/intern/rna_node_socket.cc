@@ -536,6 +536,12 @@ void rna_NodeSocketStandard_float_range(
   bNodeSocketValueFloat *dval = static_cast<bNodeSocketValueFloat *>(sock->default_value);
   int subtype = sock->typeinfo->subtype;
 
+  if (dval == nullptr) {
+    /* A button can outlive the value of its socket while the node is being rebuilt. */
+    *min = *softmin = -FLT_MAX;
+    *max = *softmax = FLT_MAX;
+    return;
+  }
   if (dval->max < dval->min) {
     dval->max = dval->min;
   }
@@ -553,6 +559,12 @@ void rna_NodeSocketStandard_int_range(
   bNodeSocketValueInt *dval = static_cast<bNodeSocketValueInt *>(sock->default_value);
   int subtype = sock->typeinfo->subtype;
 
+  if (dval == nullptr) {
+    /* A button can outlive the value of its socket while the node is being rebuilt. */
+    *min = *softmin = INT_MIN;
+    *max = *softmax = INT_MAX;
+    return;
+  }
   if (dval->max < dval->min) {
     dval->max = dval->min;
   }
@@ -569,6 +581,11 @@ void rna_NodeSocketStandard_vector_range(
   bNodeSocket *sock = static_cast<bNodeSocket *>(ptr->data);
   bNodeSocketValueVector *dval = static_cast<bNodeSocketValueVector *>(sock->default_value);
 
+  if (dval == nullptr) {
+    *min = *softmin = -FLT_MAX;
+    *max = *softmax = FLT_MAX;
+    return;
+  }
   if (dval->max < dval->min) {
     dval->max = dval->min;
   }

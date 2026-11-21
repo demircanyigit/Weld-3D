@@ -4764,7 +4764,7 @@ void node_tree_free_embedded_tree(bNodeTree *ntree)
 
 void node_tree_set_output(bNodeTree &ntree)
 {
-  const bool is_compositor = ntree.type == NTREE_COMPOSIT;
+  const bool is_compositor = ELEM(ntree.type, NTREE_COMPOSIT, NTREE_TEXTURE_GRAPH);
   const bool is_geometry = ntree.type == NTREE_GEOMETRY;
   /* find the active outputs, might become tree type dependent handler */
   for (bNode &node : ntree.nodes) {

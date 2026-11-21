@@ -8,6 +8,9 @@
 
 #include <string>
 
+#include <climits>
+
+#include "BLI_array.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.hh"
@@ -21,6 +24,7 @@
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_collection.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_mesh.hh"
@@ -33,6 +37,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "GEO_join_geometries.hh"
+#include "GEO_mesh_split_edges.hh"
 
 #include "RNA_access.hh"
 
@@ -200,6 +205,69 @@ void MOD_collider_sources_draw(ui::Layout &layout, PointerRNA *ptr)
                                   IFACE_("Add Selected Objects"),
                                   ICON_RESTRICT_SELECT_OFF);
   RNA_string_set(&selected, "modifier", name.c_str());
+}
+
+/**
+ * The piece of each point, from an attribute. A face attribute first splits the mesh where faces
+ * of different pieces meet, so every point belongs to one piece; the split mesh is returned in
+ * `r_split` and must be used and freed by the caller. Returns false when there is no attribute.
+ */
+bool MOD_pieces_from_attribute(const Mesh &mesh,
+                               const StringRef name,
+                               Mesh **r_split,
+                               Array<int> &r_pieces)
+{
+  *r_split = nullptr;
+  const std::optional<bke::AttributeMetaData> meta = mesh.attributes().lookup_meta_data(name);
+  if (!meta) {
+    return false;
+  }
+  if (meta->domain == bke::AttrDomain::Point) {
+    r_pieces.reinitialize(mesh.verts_num);
+    mesh.attributes().lookup_or_default<int>(name, bke::AttrDomain::Point, 0).varray.materialize(
+        r_pieces);
+    return true;
+  }
+
+  /* Edges between faces of different pieces. */
+  const OffsetIndices<int> faces = mesh.faces();
+  const Span<int> corner_edges = mesh.corner_edges();
+  const VArraySpan<int> face_pieces = *mesh.attributes().lookup_or_default<int>(
+      name, bke::AttrDomain::Face, 0);
+  Array<int> first_face(mesh.edges_num, -1);
+  Array<bool> split(mesh.edges_num, false);
+  for (const int face : faces.index_range()) {
+    for (const int edge : corner_edges.slice(faces[face])) {
+      if (first_face[edge] == -1) {
+        first_face[edge] = face;
+      }
+      else if (face_pieces[first_face[edge]] != face_pieces[face]) {
+        split[edge] = true;
+      }
+    }
+  }
+  const Mesh *source = &mesh;
+  IndexMaskMemory memory;
+  const IndexMask split_mask = IndexMask::from_bools(split, memory);
+  if (!split_mask.is_empty()) {
+    *r_split = BKE_mesh_copy_for_eval(mesh);
+    geometry::split_edges(**r_split, split_mask);
+    source = *r_split;
+  }
+
+  /* A point takes the piece of its faces. Points without faces stay together as one piece. */
+  const OffsetIndices<int> split_faces = source->faces();
+  const Span<int> corner_verts = source->corner_verts();
+  const VArraySpan<int> split_pieces = *source->attributes().lookup_or_default<int>(
+      name, bke::AttrDomain::Face, 0);
+  r_pieces.reinitialize(source->verts_num);
+  r_pieces.fill(INT_MIN);
+  for (const int face : split_faces.index_range()) {
+    for (const int v : corner_verts.slice(split_faces[face])) {
+      r_pieces[v] = split_pieces[face];
+    }
+  }
+  return true;
 }
 
 }  // namespace blender

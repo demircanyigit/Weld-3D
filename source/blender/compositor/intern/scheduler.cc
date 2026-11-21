@@ -141,6 +141,34 @@ static void add_output_nodes(const Context &context,
     }
   }
 
+  /* Add nodes whose outputs are not linked to anything, so they are computed and get previews. */
+  if (flag_is_set(needed_outputs_types, NodeGroupOutputTypes::UnlinkedNodes) &&
+      is_active_node_group)
+  {
+    for (const bNode *node : node_group.all_nodes()) {
+      if (node->is_muted() || node->is_frame() || node->is_reroute() || node->is_group_input() ||
+          node->is_group_output())
+      {
+        continue;
+      }
+      bool has_output = false;
+      bool is_linked = false;
+      for (const bNodeSocket *output : node->output_sockets()) {
+        if (!output->is_available()) {
+          continue;
+        }
+        has_output = true;
+        if (output->is_logically_linked()) {
+          is_linked = true;
+          break;
+        }
+      }
+      if (has_output && !is_linked) {
+        node_stack.push(node);
+      }
+    }
+  }
+
   /* None of the node groups outputs are needed, so no need to add the Group Output node. */
   if (needed_outputs.is_empty()) {
     return;

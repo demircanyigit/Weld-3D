@@ -20,7 +20,13 @@
 #include "COM_result.hh"
 #include "COM_static_cache_manager.hh"
 
+namespace blender {
+struct bNode;
+}
+
 namespace blender::compositor {
+
+class NodeOperation;
 
 /* ------------------------------------------------------------------------------------------------
  * Context
@@ -100,6 +106,22 @@ class Context {
   /* Returns true if the compositor evaluation is canceled and that the evaluator should stop
    * executing as soon as possible. */
   virtual bool is_canceled() const;
+
+  /* Size of this run next to the full size, below 1 for a quick, smaller draft run. Sizes set in
+   * pixels should be multiplied by it, so a draft looks like the full run. */
+  virtual float draft_scale() const;
+
+  /* True if image reads past the edges should wrap around to the other side, so every result
+   * tiles seamlessly. Texture graphs use this. */
+  virtual bool wrap_edges() const;
+
+  /* Results kept from earlier evaluations. If the context still has what the node made last time
+   * with the same settings and the same inputs, the outputs of the operation get those results,
+   * true is returned, and the node does not run again. */
+  virtual bool load_node_results(const bNode &node, NodeOperation &operation);
+
+  /* Called right after a node ran, so the context can keep its results for later. */
+  virtual void store_node_results(const bNode &node, NodeOperation &operation);
 
   /* Get the normalized render percentage of the active scene. */
   float get_render_percentage() const;

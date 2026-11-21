@@ -9,7 +9,7 @@ See 'release/text/readme.html' for the end user read-me.
 </p>
 
 <p align="center">
-  <b>A modeling-first 3D suite with 74 new modifiers, 77 new nodes and the classic look.</b><br>
+  <b>A modeling-first 3D suite with 98 new modifiers, 77 new nodes, a Tree Graph, a Texture Graph and the classic look.</b><br>
   Based on Blender 5.1.
 </p>
 
@@ -21,7 +21,7 @@ See 'release/text/readme.html' for the end user read-me.
 
 <p align="center">
   <img src="https://img.shields.io/badge/based%20on-Blender%205.1-ff6814?style=flat-square" alt="Based on Blender 5.1">
-  <img src="https://img.shields.io/badge/modifiers-%2B74-6f8cd6?style=flat-square" alt="74 new modifiers">
+  <img src="https://img.shields.io/badge/modifiers-%2B98-6f8cd6?style=flat-square" alt="98 new modifiers">
   <img src="https://img.shields.io/badge/geometry%20nodes-%2B77-4fa35b?style=flat-square" alt="77 new nodes">
   <img src="https://img.shields.io/badge/icons-1000%2B%20classic-a0a8b4?style=flat-square" alt="Over 1,000 classic icons">
   <img src="https://img.shields.io/badge/license-GPL--3.0-a0a8b4?style=flat-square" alt="GPL-3.0">
@@ -44,8 +44,8 @@ and your official Blender keeps working next to it.
 
 ### <img src="doc/fork/images/icons/mod_trim.png" width="32" height="32" alt=""> Build
 
-[Trim](doc/fork/TRIM.md), [Sweep](doc/fork/SWEEP.md), [Planks](doc/fork/PLANKS.md), [Roof](doc/fork/ROOF.md),
-[Stonework](doc/fork/STONEWORK.md), [Masonry](doc/fork/MASONRY.md) and [Distribute](doc/fork/DISTRIBUTE.md) make
+[Trim](doc/fork/TRIM.md), [Patch](doc/fork/PATCH.md), [Sweep](doc/fork/SWEEP.md), [Planks](doc/fork/PLANKS.md), [Roof](doc/fork/ROOF.md),
+[Stonework](doc/fork/STONEWORK.md), [Masonry](doc/fork/MASONRY.md), Bricks, Cable, Place and Scatter make
 whole parts from a few faces or edges.
 
 </td>
@@ -62,7 +62,7 @@ keep every modeling step editable, and the [Modifier List](doc/fork/MODIFIER_LIS
 ### <img src="doc/fork/images/icons/mod_voronoi_fracture.png" width="32" height="32" alt=""> Break
 
 [Voronoi Fracture](doc/fork/VORONOI_FRACTURE.md), [Shatter](doc/fork/SHATTER.md), [Dice](doc/fork/DICE.md),
-[Edge Damage](doc/fork/EDGE_DAMAGE.md) and [Collapse](doc/fork/COLLAPSE.md) break, chip and drop meshes.
+[Edge Damage](doc/fork/EDGE_DAMAGE.md), Cracks, Dent and [Collapse](doc/fork/COLLAPSE.md) break, chip and drop meshes.
 
 </td>
 </tr>
@@ -97,8 +97,10 @@ Favorites show their icons.
 
 | Area | What's new |
 |---|---|
-| [Modifiers](#modifiers) | 74 new modifiers, a [Modifier List](doc/fork/MODIFIER_LIST.md) view of the stack, [viewport gizmos](doc/fork/MODIFIER_GIZMOS.md) |
+| [Modifiers](#modifiers) | 98 new modifiers, Bake and Unbake, material pickers, a [Modifier List](doc/fork/MODIFIER_LIST.md) view of the stack, [viewport gizmos](doc/fork/MODIFIER_GIZMOS.md) |
 | [Geometry Nodes](#geometry-nodes) | 77 new nodes: 24 modeling nodes, plus node versions of the new and classic modifiers |
+| [Tree and Texture Graphs](#tree-graph-and-texture-graph) | Node editors that grow trees and make textures |
+| [Outliner](#outliner) | Drag to reorder and parent, groups, row sizes, thumbnails, counts and color tags |
 | [Tools](#tools) | [Multi-Cut](doc/fork/MULTI_CUT.md), [face set tools](doc/fork/FACE_SETS.md), Select Similar ▸ Face Set, [orthographic view fixes](doc/fork/ORTHOGRAPHIC.md), [Bounds and Align snapping](doc/fork/SNAPPING.md) |
 | [Toolbox and Shelf](#toolbox-and-shelf) | Two new editors for your own buttons, the [Toolbox](doc/fork/TOOLBOX.md) and the [Shelf](doc/fork/SHELF.md), and icons in Quick Favorites |
 | [Classic look](#classic-look) | Colored 2.79-style icons, embossed widgets, square vertices |
@@ -106,6 +108,34 @@ Favorites show their icons.
 | [Materials](doc/fork/ALL_MATERIALS.md) | An All Materials tab for every material in the file, and giving a material to all selected objects |
 
 ## What's new
+
+- **[Place](#new-modifiers)** lays objects along edges, on faces or on points by a pattern, for fences and
+  palisades. **Scatter** drops them at random spots on the faces.
+- **More modifiers**: Dent, Contact, Cable, Cracks, Collision Hull, Bricks, UV Rotate, Pack, Rock, Snow, Chisel,
+  Wrap, Lean, Masks, Faceset and Resample. **Bricks** has a Cut mode that cuts a mesh into stone blocks, for castle walls.
+- **[Tree Graph](#tree-graph-and-texture-graph)**: a node editor for trees, grown by the Tree modifier as one mesh,
+  with Trunk, Branches, Leaves, Roots, Fronds, Ivy and drawn stems, and Oak, Ash, Pine, Bush, Palm, Fern and
+  Grass presets.
+- **[Texture Graph](#tree-graph-and-texture-graph)**: a node editor that makes textures and a material from them.
+- **Bake and Unbake**: a modifier can keep its result, so the modifiers before it stop running.
+- **Material pickers**: 16 modifiers can pick a material instead of a slot number. Edge Damage keeps the
+  original normals.
+- **[Outliner](#outliner)**: drag to reorder or parent, groups with Ctrl G, row sizes, thumbnails, face counts,
+  badges and color tags.
+- **Frame Target**: a button in object fields that selects and frames that object.
+- **Copies are named `Name_01`** instead of `Name.001`.
+- **Weights as modifiers**: [Auto Weights](doc/fork/AUTO_WEIGHTS.md) binds a mesh to an armature by heat or
+  distance, even meshes with loose parts. [Smooth Weights](doc/fork/SMOOTH_WEIGHTS.md) blurs them,
+  [Transfer Weights](doc/fork/TRANSFER_WEIGHTS.md) copies them onto clothes and armor, and
+  [Bone Colors](doc/fork/BONE_COLORS.md) shows every bone's area at once in its own color.
+- **[Patch](doc/fork/PATCH.md)** cuts a surface into pieces and sews them on as patches, or splits it into a
+  quilt, with box stitches or your own stitch objects across the borders. Pieces can be Voronoi, a grid,
+  strips or drawn by hand with a cut object, per loose part and inside a vertex group.
+
+The Windows download may be an earlier build than the source.
+
+<details>
+<summary><b>Earlier additions</b></summary>
 
 - **[Trim](doc/fork/TRIM.md)** lays copies of a pattern object along drawn edges, for scalloped bands, moldings and
   borders. **[Tile](doc/fork/TILE.md)** wraps the mesh into one tile so it repeats without seams.
@@ -120,12 +150,6 @@ Favorites show their icons.
 - **[Conform](doc/fork/CONFORM.md)** lays a mesh onto another surface, keeping its thickness, for roads over
   terrain, straps and decals.
 - **[Eight more studio lights](doc/fork/STUDIO_LIGHTS.md)**, from soft and clay to neon and moonlight.
-
-The Windows download may be an earlier build than the source.
-
-<details>
-<summary><b>Earlier additions</b></summary>
-
 - **[Toon shading](doc/fork/TOON_SHADING.md)**: a Toon lighting choice in Solid mode with bands, softness, a shadow
   color, a hard highlight and a rim light.
 - **[Outlines and edge lines](doc/fork/SOLID_OUTLINES.md)** around loose parts, materials or face sets, in any
@@ -147,6 +171,9 @@ The Windows download may be an earlier build than the source.
   packs objects on faces so none of them touch.
 - **[Piece ID](doc/fork/PIECE_ID.md)** writes which piece each face or point belongs to.
 - **[Decimate algorithms](doc/fork/DECIMATE.md)**: PMP, Meshoptimizer, CGAL and Wild QEM in the Decimate modifier.
+- **[Boolean additions](doc/fork/BOOLEAN.md)**: a Self operand that merges loose parts, an Auto solver and a Clean option.
+- **[Bevel additions](doc/fork/BEVEL.md)**: random widths per edge and random segments per loose part.
+- **[Solidify additions](doc/fork/SOLIDIFY.md)**: random thickness by noise or per loose part, and flat, smooth or hard rim shading.
 - **[UV Scale and Texel Density](doc/fork/UV_SCALE.md)** as a modifier and a node.
 - **[Dice](doc/fork/DICE.md), [Edit Poly](doc/fork/EDIT_POLY.md), [Collapse](doc/fork/COLLAPSE.md),
   [Drape](doc/fork/DRAPE.md), [Shatter](doc/fork/SHATTER.md), [Masonry](doc/fork/MASONRY.md) and
@@ -180,7 +207,7 @@ The Modifiers tab has a second way to show the stack. The button in its header s
 
 ### New modifiers
 
-All 74 work like the built-in ones: they're in the Add Modifier menu with their own icons, they can be applied,
+All 98 work like the built-in ones: they're in the Add Modifier menu with their own icons, they can be applied,
 and most of them also work in Edit Mode.
 
 ![Voronoi Fracture with Exploded View, a tower made with Poly Select and four Poly Edits, Panelize on a sphere, and Radial Array](doc/fork/images/modifiers_modeling.png)
@@ -207,6 +234,19 @@ Array.*
 | <img src="doc/fork/images/icons/mod_symmetrize.png" width="32" height="32" alt="Symmetrize"> | [Symmetrize](doc/fork/SYMMETRIZE.md) | Makes one side of the mesh a mirror of the other |
 | <img src="doc/fork/images/icons/mod_sweep.png" width="32" height="32" alt="Sweep"> | [Sweep](doc/fork/SWEEP.md) | Makes a mesh by moving a shape along curves or the edges of a mesh, with resampling and smoothing |
 | <img src="doc/fork/images/icons/mod_trim.png" width="32" height="32" alt="Trim"> | [Trim](doc/fork/TRIM.md) | Lays copies of a pattern object along the edges of the mesh, like a scalloped band |
+| <img src="doc/fork/images/icons/mod_patch.png" width="32" height="32" alt="Patch"> | [Patch](doc/fork/PATCH.md) | Cuts a surface into patches, laid on top or split apart, with stitches across their borders |
+| <img src="doc/fork/images/icons/mod_pack.png" width="32" height="32" alt="Pack"> | [Pack](doc/fork/PACK.md) | Fills the volume with copies of other objects, fitted close together, and can swell them to fit each other |
+| <img src="doc/fork/images/icons/mod_rock.png" width="32" height="32" alt="Rock"> | [Rock](doc/fork/ROCK.md) | Turns a shape into a low poly rock with flat cuts through its corners, every loose part its own rock |
+| <img src="doc/fork/images/icons/mod_place.png" width="32" height="32" alt="Place"> | Place | Places objects along the edges, on the faces or on the points, by a pattern such as "1x3 2" |
+| <img src="doc/fork/images/icons/mod_scatter.png" width="32" height="32" alt="Scatter"> | Scatter | Scatters objects at random spots on the faces, picked by weight |
+| <img src="doc/fork/images/icons/mod_bricks.png" width="32" height="32" alt="Bricks"> | Bricks | Rebuilds a closed mesh from bricks in rows, stepped or cut into blocks with Running, Stack, Flemish, English or Ashlar joints |
+| <img src="doc/fork/images/icons/mod_cable.png" width="32" height="32" alt="Cable"> | Cable | Hangs cables between two objects or along the loose edges |
+| <img src="doc/fork/images/icons/mod_wrap.png" width="32" height="32" alt="Wrap"> | Wrap | Lays straps, tubes or ropes over an object along lines |
+| <img src="doc/fork/images/icons/mod_cracks.png" width="32" height="32" alt="Cracks"> | Cracks | Branching cracks over the surface, cut in as grooves or added as strips |
+| <img src="doc/fork/images/icons/mod_chisel.png" width="32" height="32" alt="Chisel"> | Chisel | Cuts flat chips into the sharp edges of boards and beams, like hand cut wood |
+| <img src="doc/fork/images/icons/mod_snow.png" width="32" height="32" alt="Snow"> | Snow | Lays soft snow on the parts that face up and are open to the sky |
+| <img src="doc/fork/images/icons/mod_tree.png" width="32" height="32" alt="Tree"> | Tree | Grows a tree from a [Tree Graph](#tree-graph-and-texture-graph), as one mesh ready for games |
+| <img src="doc/fork/images/icons/mod_resample.png" width="32" height="32" alt="Resample"> | Resample | Adds points along the edges without changing the shape |
 | <img src="doc/fork/images/icons/mod_dice.png" width="32" height="32" alt="Dice"> | [Dice](doc/fork/DICE.md) | Cuts a mesh into a grid of solid pieces, by count or size |
 | <img src="doc/fork/images/icons/mod_divide.png" width="32" height="32" alt="Divide"> | [Divide](doc/fork/DIVIDE.md) | Divides polygon surfaces into connected grid-like sections with adjustable size, offset and rotation |
 | <img src="doc/fork/images/icons/mod_join.png" width="32" height="32" alt="Join"> | [Join](doc/fork/JOIN.md) | Combines evaluated meshes from objects and collections without Boolean operations, with an ID per object and per parent |
@@ -262,6 +302,9 @@ Every step stays editable, like a history you can go back and change.
 | <img src="doc/fork/images/icons/mod_relax.png" width="32" height="32" alt="Relax"> | [Relax](doc/fork/RELAX.md) | Evens out the spacing of the points while keeping them on the surface |
 | <img src="doc/fork/images/icons/mod_shapekey_inbetween.png" width="32" height="32" alt="Shape Key In-between"> | [Shape Key In-between](doc/fork/SHAPE_KEY_INBETWEEN.md) | Morphs through a sequence of shape keys with one value |
 | <img src="doc/fork/images/icons/mod_conform.png" width="32" height="32" alt="Conform"> | [Conform](doc/fork/CONFORM.md) | Lays the mesh onto the surface of another object, keeping its thickness |
+| <img src="doc/fork/images/icons/mod_dent.png" width="32" height="32" alt="Dent"> | Dent | Presses round dents into the surface, at an object or at random spots |
+| <img src="doc/fork/images/icons/mod_contact.png" width="32" height="32" alt="Contact"> | Contact | Squashes the mesh where another object presses into it, with a bulge around |
+| <img src="doc/fork/images/icons/mod_lean.png" width="32" height="32" alt="Lean"> | Lean | Pushes loose pieces aside with an object, so they lean instead of crumbling |
 
 ![Bend, Twist, Taper and Noise on four bars](doc/fork/images/modifiers_deform.png)
 
@@ -289,6 +332,19 @@ Every step stays editable, like a history you can go back and change.
 | <img src="doc/fork/images/icons/mod_data_channel.png" width="32" height="32" alt="Data Channel"> | [Data Channel](doc/fork/DATA_CHANNEL.md) | Computes a value per point, such as convexity or edge length, remaps it and writes it out |
 | <img src="doc/fork/images/icons/mod_piece_id.png" width="32" height="32" alt="Piece ID"> | [Piece ID](doc/fork/PIECE_ID.md) | Writes which piece each face or point belongs to, from loose parts, edges, materials, face sets, a group, an attribute or the selection |
 | <img src="doc/fork/images/icons/mod_tension.png" width="32" height="32" alt="Tension"> | [Tension](doc/fork/TENSION.md) | Stores how much the mesh is stretched or squashed compared to its rest shape |
+| <img src="doc/fork/images/icons/mod_uv_rotate.png" width="32" height="32" alt="UV Rotate"> | UV Rotate | Turns the UVs by an angle, or lines up each island with an axis, in world, object or custom space |
+| <img src="doc/fork/images/icons/mod_masks.png" width="32" height="32" alt="Masks"> | Masks | Stores a gray mask per point, such as occlusion, curvature or edges |
+| <img src="doc/fork/images/icons/mod_faceset.png" width="32" height="32" alt="Faceset"> | Faceset | Makes face sets from islands, materials, angles, seams and more |
+| <img src="doc/fork/images/icons/mod_collision_hull.png" width="32" height="32" alt="Collision Hull"> | Collision Hull | Simple closed shapes around the mesh for game collision |
+
+**Weights**
+
+| | Modifier | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/mod_auto_weights.png" width="32" height="32" alt="Auto Weights"> | [Auto Weights](doc/fork/AUTO_WEIGHTS.md) | Gives each bone of an armature its own vertex group, by heat or distance, bound once and saved |
+| <img src="doc/fork/images/icons/mod_smooth_weights.png" width="32" height="32" alt="Smooth Weights"> | [Smooth Weights](doc/fork/SMOOTH_WEIGHTS.md) | Blurs vertex group weights along the surface, so they don't jump across gaps |
+| <img src="doc/fork/images/icons/mod_transfer_weights.png" width="32" height="32" alt="Transfer Weights"> | [Transfer Weights](doc/fork/TRANSFER_WEIGHTS.md) | Copies the weights of a weighted body onto clothes or armor, and follows as you edit |
+| <img src="doc/fork/images/icons/mod_bone_colors.png" width="32" height="32" alt="Bone Colors"> | [Bone Colors](doc/fork/BONE_COLORS.md) | Colors the mesh by the bones it follows, with left and right bones in the same color |
 
 **Curves**
 
@@ -298,6 +354,15 @@ Every step stays editable, like a history you can go back and change.
 | <img src="doc/fork/images/icons/mod_relax_spline.png" width="32" height="32" alt="Relax Spline"> | [Relax Spline](doc/fork/RELAX_SPLINE.md) | Smooths the curves |
 | <img src="doc/fork/images/icons/mod_chamfer_spline.png" width="32" height="32" alt="Chamfer Spline"> | [Chamfer Spline](doc/fork/CHAMFER_SPLINE.md) | Cuts the corners of the curves, straight or rounded |
 | <img src="doc/fork/images/icons/mod_spline_morph.png" width="32" height="32" alt="Spline Morph"> | [Spline Morph](doc/fork/SPLINE_MORPH.md) | Moves the curves toward the curves of another object |
+
+### Bake and material pickers
+
+- <img src="doc/fork/images/icons/modifier_bake.png" width="32" height="32" alt="Bake"> **Bake:** the dropdown
+  of a mesh modifier has Bake and Unbake. A baked modifier keeps the result of the stack up to it, so the
+  modifiers before it stop running. Only the mesh is kept.
+- **Material pickers:** Rock, Snow, Voronoi Fracture, Cable, Cracks, Planks, Roof, Edge Damage, Patch, Dice,
+  Chisel, Wrap, Shatter, Masonry, Stonework and Distribute can pick a material instead of a slot number.
+- **Edge Damage** keeps the original normals on the faces it doesn't touch.
 
 ### Viewport gizmos
 
@@ -317,23 +382,23 @@ They follow the viewport's Gizmos ▸ Active Modifier toggle.
 ### Modeling nodes
 
 Add them with **Add ▸ Mesh ▸ Operations**, or **Add ▸ Curve ▸ Operations** for Sweep. Each one is described in
-more detail [further down](#modeling-nodes-in-detail).
+more detail in [the node notes](doc/fork/NODES.md).
 
 | | Node | What it does |
 |---|---|---|
-| <img src="doc/fork/images/icons/mod_isotropic_remesh.png" width="32" height="32" alt="Isotropic Remesh"> | [Isotropic Remesh](#isotropic-remesh) | Rebuild a mesh out of uniformly sized, near-equilateral triangles that follow the original surface |
-| <img src="doc/fork/images/icons/geo_n_decimate_mesh.png" width="32" height="32" alt="Decimate Mesh"> | [Decimate Mesh](#decimate-mesh) | Reduce the number of triangles of a mesh, removing detail where it changes the surface the least |
-| <img src="doc/fork/images/icons/mod_voronoi_fracture.png" width="32" height="32" alt="Voronoi Fracture"> | [Voronoi Fracture](#voronoi-fracture) | Cut a closed mesh into solid pieces, one for the area around each of the given points |
-| <img src="doc/fork/images/icons/geo_mod_bevel.png" width="32" height="32" alt="Bevel"> | [Bevel](#bevel) | Bevel the edges or vertices of a mesh, like the Bevel modifier |
-| <img src="doc/fork/images/icons/mod_sweep.png" width="32" height="32" alt="Sweep"> | [Sweep](#sweep) | Make a mesh by moving a shape along curves, with control over its scale, roll and twist |
-| <img src="doc/fork/images/icons/geo_resample.png" width="32" height="32" alt="Resample Mesh"> | [Resample Mesh](#resample-mesh) | Add points along the edges of a mesh without changing its shape or its number of faces |
-| <img src="doc/fork/images/icons/geo_n_quadri_flow_remesh.png" width="32" height="32" alt="QuadriFlow Remesh"> | [QuadriFlow Remesh](#quadriflow-remesh) | Rebuild a manifold mesh out of quads that follow the flow of its surface |
-| <img src="doc/fork/images/icons/geo_bisect.png" width="32" height="32" alt="Clip"> | [Clip](#clip) | Cut a mesh with a plane and remove one side, optionally filling the cut |
-| <img src="doc/fork/images/icons/geo_knife.png" width="32" height="32" alt="Dice"> | [Dice](#dice) | Cut a mesh into a grid of pieces along the X, Y and Z axes of its bounding box |
-| <img src="doc/fork/images/icons/geo_mod_decim.png" width="32" height="32" alt="Dissolve"> | [Dissolve](#dissolve) | Remove points, edges or faces and merge the faces around them, without leaving holes |
-| <img src="doc/fork/images/icons/geo_mod_smooth.png" width="32" height="32" alt="Smooth"> | [Smooth](#smooth) | Smooth the surface of a mesh by moving its points |
-| <img src="doc/fork/images/icons/mod_relax.png" width="32" height="32" alt="Relax"> | [Relax](#relax) | Even out the distances between the points of a mesh by sliding them along its surface |
-| <img src="doc/fork/images/icons/geo_mod_displace.png" width="32" height="32" alt="Displace"> | [Displace](#displace) | Move the points of a mesh by a height or vector, like the Displace modifier |
+| <img src="doc/fork/images/icons/mod_isotropic_remesh.png" width="32" height="32" alt="Isotropic Remesh"> | [Isotropic Remesh](doc/fork/NODES.md#isotropic-remesh) | Rebuild a mesh out of uniformly sized, near-equilateral triangles that follow the original surface |
+| <img src="doc/fork/images/icons/geo_n_decimate_mesh.png" width="32" height="32" alt="Decimate Mesh"> | [Decimate Mesh](doc/fork/NODES.md#decimate-mesh) | Reduce the number of triangles of a mesh, removing detail where it changes the surface the least |
+| <img src="doc/fork/images/icons/mod_voronoi_fracture.png" width="32" height="32" alt="Voronoi Fracture"> | [Voronoi Fracture](doc/fork/NODES.md#voronoi-fracture) | Cut a closed mesh into solid pieces, one for the area around each of the given points |
+| <img src="doc/fork/images/icons/geo_mod_bevel.png" width="32" height="32" alt="Bevel"> | [Bevel](doc/fork/NODES.md#bevel) | Bevel the edges or vertices of a mesh, like the Bevel modifier |
+| <img src="doc/fork/images/icons/mod_sweep.png" width="32" height="32" alt="Sweep"> | [Sweep](doc/fork/NODES.md#sweep) | Make a mesh by moving a shape along curves, with control over its scale, roll and twist |
+| <img src="doc/fork/images/icons/geo_resample.png" width="32" height="32" alt="Resample Mesh"> | [Resample Mesh](doc/fork/NODES.md#resample-mesh) | Add points along the edges of a mesh without changing its shape or its number of faces |
+| <img src="doc/fork/images/icons/geo_n_quadri_flow_remesh.png" width="32" height="32" alt="QuadriFlow Remesh"> | [QuadriFlow Remesh](doc/fork/NODES.md#quadriflow-remesh) | Rebuild a manifold mesh out of quads that follow the flow of its surface |
+| <img src="doc/fork/images/icons/geo_bisect.png" width="32" height="32" alt="Clip"> | [Clip](doc/fork/NODES.md#clip) | Cut a mesh with a plane and remove one side, optionally filling the cut |
+| <img src="doc/fork/images/icons/geo_knife.png" width="32" height="32" alt="Dice"> | [Dice](doc/fork/NODES.md#dice) | Cut a mesh into a grid of pieces along the X, Y and Z axes of its bounding box |
+| <img src="doc/fork/images/icons/geo_mod_decim.png" width="32" height="32" alt="Dissolve"> | [Dissolve](doc/fork/NODES.md#dissolve) | Remove points, edges or faces and merge the faces around them, without leaving holes |
+| <img src="doc/fork/images/icons/geo_mod_smooth.png" width="32" height="32" alt="Smooth"> | [Smooth](doc/fork/NODES.md#smooth) | Smooth the surface of a mesh by moving its points |
+| <img src="doc/fork/images/icons/mod_relax.png" width="32" height="32" alt="Relax"> | [Relax](doc/fork/NODES.md#relax) | Even out the distances between the points of a mesh by sliding them along its surface |
+| <img src="doc/fork/images/icons/geo_mod_displace.png" width="32" height="32" alt="Displace"> | [Displace](doc/fork/NODES.md#displace) | Move the points of a mesh by a height or vector, like the Displace modifier |
 | <img src="doc/fork/images/icons/geo_mod_collapse.png" width="32" height="32" alt="Collapse Islands"> | [Collapse Islands](doc/fork/NODES.md#collapse-islands) | Drops connected islands as rigid pieces onto ground geometry or a floor |
 | <img src="doc/fork/images/icons/geo_mod_drape.png" width="32" height="32" alt="Drape"> | [Drape](doc/fork/NODES.md#drape) | Settles cloth over collider geometry, with a Pin field |
 | <img src="doc/fork/images/icons/geo_mod_shatter.png" width="32" height="32" alt="Shatter"> | [Shatter](doc/fork/NODES.md#shatter) | Breaks a closed mesh and outputs Piece Index and Interior fields |
@@ -419,191 +484,31 @@ The classic modifiers that had no node now have one too.
 
 ![The 21 classic modifiers as nodes in the Geometry Nodes editor](doc/fork/images/nodes_classic_modifiers.png)
 
-### Modeling nodes in detail
+## Tree Graph and Texture Graph
 
-#### Isotropic Remesh
+Two new node editors, picked from the Node Editor's type menu.
 
-Rebuilds a mesh out of even, near-equilateral triangles that follow the original surface. Hard Edges keeps the
-edges you choose, like the eye and mouth rims here.
+- <img src="doc/fork/images/icons/node_tree_graph.png" width="32" height="32" alt="Tree Graph"> **Tree Graph:**
+  nodes for the Trunk, Branches, Leaves, Roots, Fronds, Ivy and stems drawn with a curve, shaped by Force, Avoid,
+  Crown and Prune, with Bark on the surface. The Tree modifier grows it as one mesh and shows the graph's inputs,
+  like a Geometry Nodes modifier. Presets: Oak, Ash, Bare Tree, Pine, Bush, Palm, Fern and Grass Tuft. Growth
+  follows EZ-Tree (MIT license).
+- <img src="doc/fork/images/icons/node_texture_graph.png" width="32" height="32" alt="Texture Graph"> **Texture
+  Graph:** over 30 nodes for noise, patterns, shapes, blur, warp, levels, normal maps and more. Each output
+  becomes an image, and one click makes a material from them.
 
-- **Modes:** Uniform uses one edge length, and zero uses the input's average. Adaptive uses shorter edges where
-  the surface curves, between a Min and Max Edge Length and within a Tolerance.
-- **What to keep:** Preserve Boundary keeps open edges in place, and Preserve Sharp Edges keeps edges above a
-  Sharp Angle. Hard Edges is a field, so it can take the `sharp_edge` attribute or an Edge Angle comparison.
-- **Attributes:** point, face and corner attributes such as UVs are sampled from the nearest surface. Edge
-  attributes are lost because every edge is new.
+## Outliner
 
-![Suzanne as the original, remeshed, and remeshed with Hard Edges](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/isotropic_remesh.png)
-
-#### Decimate Mesh
-
-Reduces triangles where it changes the surface the least, so flat areas lose detail before curved ones. The
-result is triangles.
-
-- **Target:** Ratio keeps a fraction of the selected vertices, and Face Count aims for a number of triangles.
-- **Limits:** Max Error, Max Normal Change and Max Aspect Ratio protect quality and can stop it before the
-  target. Set any of them to zero to turn it off.
-- **What to keep:** Selection picks which vertices may be removed. Preserve Boundary and the Hard Edges field
-  protect open edges and the edges you choose.
-
-![Suzanne before and after Decimate Mesh](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/decimate_mesh.png)
-
-#### Voronoi Fracture
-
-Cuts a closed mesh into solid pieces around the points you give it, with the cut faces filled in. More points
-in an area make smaller pieces there.
-
-- **Inputs:** Cell Points takes any geometry with points, Cut Gap leaves space between the pieces, and Separate
-  Islands splits parts of a cell that aren't connected.
-- **Outputs:** Piece Index numbers the pieces, for example for Split to Instances. Cell Index tells you which
-  point made each piece. Interior selects the cut faces, which is how the orange material is set here.
-- **Good to know:** the mesh has to be closed. The pieces stay in place until you move them, as in the picture
-  on the right.
-
-![A sphere, the same sphere cut into pieces, and the pieces moved apart showing orange inside faces](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/voronoi_fracture.png)
-
-#### Bevel
-
-The Bevel modifier as a node, using the same code. It gave the same result as the modifier in every setting
-compared. Unlike the modifier, Amount and Weight can differ per edge or vertex, for example from Random Value.
-
-- **Inputs:** Affect picks Edges or Vertices. Width Type, Segments and Shape work as in the modifier. Selection
-  picks what to bevel, and Angle skips edges flatter than a limit.
-- **Geometry and Shading panels:** miters, Spread, Intersections, Clamp Overlap, Loop Slide, Harden Normals, Mark
-  Seam, Mark Sharp and Material Index.
-- **Output:** Bevel Faces selects the new faces, for example to give them their own material.
-- **Good to know:** only edges with exactly two faces get beveled. There's no custom profile or Face Strength
-  yet. Segments, Shape and Spread are one value for the whole mesh.
-
-![A cube, a beveled cube and a cube with a random bevel on each edge](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/bevel.png)
-
-![Random Value connected to the Amount input of the Bevel node](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/node_editor.png)
-
-#### Sweep
-
-Sweeps a shape along curves, inspired by Houdini's Sweep. It gives the same surface as Curve to Mesh where the two
-overlap, but needs no extra nodes for the shape and also makes UVs.
-
-- **Shapes:** Round Tube, Square Tube, Ribbon, or your own curves in Cross Section. Columns sets the number of
-  faces around the built-in shapes.
-- **Per curve point:** Scale, Roll and Twist are fields. Twist grows from nothing at the start of the curve to
-  the full angle at its end.
-- **Outputs:** UV Map follows the shape and the curve, with Length Based UVs keeping faces in proportion. Caps
-  selects the end faces made by Fill Caps.
-- **Good to know:** caps are flat. Every cross section is swept along every curve. Twist needs enough curve
-  points to show, so put Resample Curve in front of a two-point line.
-
-![Three spirals swept with a round tube, a twisted square tube and a star](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/sweep.png)
-
-#### Resample Mesh
-
-Adds points along edges without changing the shape or the number of faces, inspired by Houdini's Resample.
-
-- **Modes:** Length sets the distance between points, and Count sets the segments on each edge. Both are fields, so
-  they can differ per edge. Selection picks which edges change.
-- **Output:** New Points selects the added points, for example to place instances on them.
-- **Attributes:** point and corner attributes such as colors and UVs are interpolated onto the new points, and
-  shared points stay welded.
-- **Good to know:** edges stay straight, so curved surfaces don't get smoother. Faces become n-gons with extra
-  points, so add Triangulate if you need triangles.
-
-![A cube before and after Resample Mesh, with its points shown in orange](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/resample_mesh.png)
-
-#### Clip
-
-Cuts a mesh with a plane and removes one side, inspired by Houdini's Clip. The cut can be filled, and rings keep
-their hole.
-
-- **Plane:** Origin, Direction and Distance set the plane. Space picks whether it moves with the object or stays
-  in place in the world.
-- **Keep:** Above, Below, or Both to only add the cut to the surface.
-- **Outputs:** Interior selects the fill faces, like the orange ones here, and Cut Edges selects the edges along
-  the cut, for example to bevel them.
-- **Good to know:** only closed loops can be filled, so cutting an open mesh may leave parts of the cut open.
-
-![A sphere, a cube and a torus cut at an angle with orange fill faces](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/clip.png)
-
-#### Dice
-
-Cuts a mesh into a grid of pieces along its bounding box. Pick a count on X, Y and Z, or a cell size, and you're
-done. It doesn't need points like Voronoi Fracture, and it also works on open meshes.
-
-- **Grid:** Count X, Y and Z, or Size in Size mode. Space uses the bounding box and axes of the object or of the
-  world, so the cuts can stay straight when the object rotates.
-- **Options:** Cut Gap leaves space between the pieces, Fill Cuts makes them solid, and Separate Islands splits
-  parts of a cell that aren't connected.
-- **Outputs:** Piece Index numbers the pieces, for example for Split to Instances. Cell Index is the position in
-  the grid. Interior selects the fill faces.
-- **Good to know:** each mesh uses its own bounding box, so add Realize Instances in front to dice instances
-  together. Pieces at the edge of a curved shape can be very small.
-
-![A sphere cut into 2 x 2 x 2 and 4 x 4 x 4 pieces, and a torus cut into 6 x 6 x 1 pieces](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/dice.png)
-
-#### Dissolve
-
-Removes parts of a mesh and merges the faces around them instead of leaving holes, using the same code as
-Dissolve in Edit Mode.
-
-- **Modes:** Vertices, Edges and Faces use the Selection field. Limited removes edges and points where the surface
-  stays nearly flat, below an Angle.
-- **Options:** Remove Inline Points cleans up points left between two edges. In Limited mode, the Keep panel stops
-  merging across materials, seams, sharp edges or UVs.
-- **Output:** Merged Faces selects the faces that were made, except in Vertices mode.
-- **Good to know:** merged faces can be n-gons that aren't flat, which can shade unevenly.
-
-![A cube going from 96 faces to 6 with Limited, and a sphere with random edges dissolved](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/dissolve.png)
-
-#### Smooth
-
-Smooths a surface by moving points toward their neighbors. Topology and attributes stay the same.
-
-- **Methods:** Average is strong, but the mesh shrinks with more iterations. Keep Volume mostly keeps the size, but
-  only removes small bumps, so big shapes stay.
-- **Control:** Factor and Selection are fields, so strength can differ per point. Preserve Boundary and the Hard
-  Edges field keep those points in place.
-
-![A lumpy sphere, smoothed with Average and with Keep Volume](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/smooth.png)
-
-#### Relax
-
-Evens out the distances between points by sliding them along the surface, so the shape stays the same.
-
-- **Control:** Factor and Selection are fields, Iterations sets the number of passes, and Keep on Surface moves
-  points back onto the original surface after each pass.
-- **What to keep:** Preserve Boundary and the Hard Edges field keep those points in place.
-- **Good to know:** it doesn't change how points are connected, so uneven topology like the poles of a UV sphere
-  stays uneven. Isotropic Remesh does that.
-
-![A sphere with uneven points, and the same sphere with even points after Relax](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/relax.png)
-
-#### QuadriFlow Remesh
-
-Rebuilds a mesh out of quads that follow the flow of its surface, using the same code as the QuadriFlow option of
-the Remesh operator, but as a node you can keep changing.
-
-- **Target:** Face Count, a Ratio of the input's faces, or an Edge Length. The result is only close to the target.
-- **Options:** Seed changes the layout of the quads. Preserve Sharp and Preserve Boundary try to follow sharp
-  features and open boundaries.
-- **Attributes:** attributes and materials carry over, copied from the nearest part of the input.
-- **Good to know:** the mesh must be manifold, or the node shows an error and leaves it as it is. Details smaller
-  than the quads get crumpled or lost. It's slow and runs again when anything before it changes, so bake it or use a
-  low target while working.
-
-![Suzanne as the original and remeshed with QuadriFlow at two sizes](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/quadriflow_remesh.png)
-
-#### Displace
-
-Moves points by a height or a vector, like the Displace modifier, but you connect any texture or field directly.
-Without a texture it gives the same result as the modifier.
-
-- **Modes:** Normal moves along each point's normal, Direction along a direction, and Vector by a vector, for
-  example from the color of a texture.
-- **Per point:** Height, Direction, Vector, Strength and Selection are fields. Midlevel sets the value that doesn't
-  move a point, so 0.5 pushes points both ways.
-- **Good to know:** the mesh needs enough points to show detail, so subdivide it first if needed. Direction and
-  Vector are relative to the object.
-
-![A sphere displaced along its normals and a plane displaced along a direction](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/displace.png)
+- **Drag and drop:** drop on an object to parent to it, or between rows to change the order.
+- <img src="doc/fork/images/icons/object_group.png" width="32" height="32" alt="Group"> **Groups:** Ctrl G
+  groups the selected objects under a group, with a pivot menu, and Ctrl Alt G ungroups them. A box shows around
+  a selected group.
+- **Rows:** Compact, Normal or Roomy, with thumbnails in Roomy, face or triangle counts, child counts on closed
+  rows, group bands, badges for modifiers, materials, constraints and locks, and color tags.
+- **Auto Focus** opens the parents of the active object and scrolls to it, with a lit path to it.
+- <img src="doc/fork/images/icons/frame_target.png" width="32" height="32" alt="Frame Target"> **Frame Target:**
+  a button in the object fields of modifiers, constraints and effects that selects and frames that object.
+- **Names:** copies are named `Name_01`, `Name_02` instead of `Name.001`.
 
 ## Tools
 
@@ -685,7 +590,6 @@ Material.
 - **Settings:** Factor sets the strength. Two Colors and Color Ramp can read Brightness, Red, Green, Blue or Alpha.
 - **Good to know:** it only changes the viewport, not renders, and only applies to meshes.
 
-![Suzanne with the None, Multiply, Two Colors and Color Ramp options](https://github.com/demircanyigit/Weld-3D/releases/download/v5.1-custom-2/solid_colors.png)
 
 ## More
 
@@ -697,37 +601,7 @@ Material.
 - [The classic look](doc/fork/CLASSIC_UI.md)
 - [Building on Windows](doc/fork/BUILD_WINDOWS.md)
 
-The rest of this page is Blender's own read-me.
+## License
 
-Blender
-=======
-
-Blender is the free and open source 3D creation suite.
-It supports the entirety of the 3D pipeline—modeling, rigging, animation, simulation, rendering, compositing,
-motion tracking and video editing.
-
-![Blender screenshot](https://code.blender.org/wp-content/uploads/2018/12/springrg.jpg "Blender screenshot")
-
-Project Pages
--------------
-
-- [Main Website](http://www.blender.org)
-- [Reference Manual](https://docs.blender.org/manual/en/latest/index.html)
-- [User Community](https://www.blender.org/community/)
-
-Development
------------
-
-- [Build Instructions](https://developer.blender.org/docs/handbook/building_blender/)
-- [Code Review & Bug Tracker](https://projects.blender.org)
-- [Developer Forum](https://devtalk.blender.org)
-- [Developer Documentation](https://developer.blender.org/docs/)
-
-
-License
--------
-
-Blender as a whole is licensed under the GNU General Public License, Version 3.
-Individual files may have a different but compatible license.
-
-See [blender.org/about/license](https://www.blender.org/about/license) for details.
+Weld 3D is based on [Blender](https://www.blender.org) and, like Blender, is licensed under the GNU General
+Public License, Version 3. Individual files may have a different but compatible license.

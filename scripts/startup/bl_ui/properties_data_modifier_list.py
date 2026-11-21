@@ -664,13 +664,16 @@ MESH_CATEGORIES_TOP = (
         'BEVEL', 'BOOLEAN', 'CAP_HOLES', 'CLEANUP', 'FACE_EXTRUDE', 'INSET', 'JOIN',
         'MIRROR', 'POKE', 'SLICE', 'SOLIDIFY', 'SYMMETRIZE', 'WELD',
     )),
-    ("Break", ('COLLAPSE', 'DICE', 'EDGE_DAMAGE', 'SHATTER', 'VORONOI_FRACTURE')),
+    ("Break", ('CHISEL', 'COLLAPSE', 'CRACKS', 'DICE', 'EDGE_DAMAGE', 'LEAN', 'SHATTER', 'VORONOI_FRACTURE')),
     ("Build", (
-        'DISTRIBUTE', 'DRAPE', 'MASONRY', 'PANELIZE', 'PLANKS', 'ROOF', 'SCREW', 'SKIN', 'STONEWORK',
-        'SWEEP', 'TRIM', 'VOLUME_TO_MESH', 'WIREFRAME',
+        'CABLE', 'DISTRIBUTE', 'DRAPE', 'PACK', 'PLACE', 'SCATTER', 'SCREW', 'SKIN', 'SWEEP', 'TRIM',
+        'VOLUME_TO_MESH', 'WIREFRAME', 'WRAP',
+    )),
+    ("Create", (
+        'NODES', 'BRICKS', 'MASONRY', 'PANELIZE', 'PATCH', 'PLANKS', 'ROCK', 'ROOF', 'SNOW', 'STONEWORK', 'TREE',
     )),
     ("Topology", (
-        'SUBSURF', 'MULTIRES', 'DECIMATE', 'DIVIDE', 'DISSOLVE', 'REMESH', 'ISOTROPIC_REMESH', 'QUADRIFLOW_REMESH',
+        'SUBSURF', 'MULTIRES', 'DECIMATE', 'DIVIDE', 'DISSOLVE', 'FACESET', 'REMESH', 'RESAMPLE', 'ISOTROPIC_REMESH', 'QUADRIFLOW_REMESH',
         'TRIANGULATE', 'QUADRANGULATE', 'BEAUTIFY_FACES', 'ROTATE_EDGES', 'EDGE_SPLIT',
     )),
     ("Elements", (
@@ -678,11 +681,11 @@ MESH_CATEGORIES_TOP = (
         'RANDOMIZE_ELEMENTS', 'ELEMENT_ORDER', 'ELEMENT_PIVOT',
     )),
     ("Deform", (
-        'ARMATURE', 'CURVE', 'HOOK', 'LATTICE', 'MESH_DEFORM', 'SURFACE_DEFORM', 'SHRINKWRAP', 'CONFORM',
+        'ARMATURE', 'CURVE', 'HOOK', 'LATTICE', 'MESH_DEFORM', 'SURFACE_DEFORM', 'SHRINKWRAP', 'CONFORM', 'CONTACT',
         'LAPLACIANDEFORM', 'FFD_2', 'FFD_3', 'FFD_4', 'SHAPE_KEY_INBETWEEN',
     )),
     ("Shape", (
-        'BEND', 'TWIST', 'TAPER', 'STRETCH', 'SIMPLE_DEFORM', 'CAST', 'CARVE', 'DISPLACE', 'NOISE', 'PUSH',
+        'BEND', 'TWIST', 'TAPER', 'STRETCH', 'SIMPLE_DEFORM', 'CAST', 'CARVE', 'DENT', 'DISPLACE', 'NOISE', 'PUSH',
         'MELT', 'WARP', 'WAVE',
     )),
 )
@@ -692,10 +695,13 @@ MESH_CATEGORIES_BOTTOM = (
         'NORMAL_EDIT', 'WEIGHTED_NORMAL', 'NORMAL_TRANSFER', 'NORMAL_SMOOTH', 'NORMAL_FACE_SETS',
         'NORMAL_SHAPE', 'MARK_BY_ANGLE',
     )),
-    ("UV", ('UV_PROJECT', 'UVW_MAP', 'UV_WARP', 'UV_SCALE', 'SMART_UV_PROJECT', 'UV_UNWRAP', 'UV_PACK')),
+    ("UV", ('UV_PROJECT', 'UVW_MAP', 'UV_WARP', 'UV_SCALE', 'SMART_UV_PROJECT', 'UV_UNWRAP', 'UV_PACK', 'UV_ROTATE')),
     ("Data", (
-        'DATA_TRANSFER', 'DATA_CHANNEL', 'PIECE_ID',
-        'MATERIAL_BY_ELEMENT', 'MATERIALIZE', 'TENSION', 'MESH_CACHE', 'MESH_SEQUENCE_CACHE',
+        'DATA_TRANSFER', 'DATA_CHANNEL', 'PIECE_ID', 'COLLISION_HULL',
+        'MATERIAL_BY_ELEMENT', 'MATERIALIZE', 'MASKS', 'TENSION', 'MESH_CACHE', 'MESH_SEQUENCE_CACHE',
+    )),
+    ("Weights", (
+        'AUTO_WEIGHTS', 'SMOOTH_WEIGHTS', 'TRANSFER_WEIGHTS', 'BONE_COLORS',
         'VERTEX_WEIGHT_EDIT', 'VERTEX_WEIGHT_MIX', 'VERTEX_WEIGHT_PROXIMITY',
     )),
     ("Select", ('EDIT_POLY', 'POLY_SELECT', 'POLY_EDIT', 'VOLUME_SELECT')),
@@ -724,15 +730,16 @@ class OBJECT_MT_modifier_list_add(ModifierListAddMenu, Menu):
     def draw_mesh(self, layout):
         """All mesh modifiers at once, one row of columns with short groups stacked."""
         groups = dict(MESH_CATEGORIES_TOP + MESH_CATEGORIES_BOTTOM)
+        # Paired so the columns are close in height and the menu fits on screen.
         columns = (
-            ("Edit", "Break"),
-            ("Build", "Select"),
+            ("Edit", "Select"),
+            ("Build", "Break"),
+            ("Create", "Data"),
             ("Topology", "Smooth"),
             ("Elements", "Normals"),
-            ("Deform",),
-            ("Shape",),
-            ("UV", "Data"),
-            ("Physics", "Geometry Nodes"),
+            ("Deform", "Weights"),
+            ("Shape", "UV"),
+            ("Physics",),
         )
         row = layout.row()
         for titles in columns:
@@ -740,13 +747,7 @@ class OBJECT_MT_modifier_list_add(ModifierListAddMenu, Menu):
             for k, title in enumerate(titles):
                 if k:
                     col.separator(factor=1.5)
-                if title == "Geometry Nodes":
-                    col.label(text=title)
-                    col.separator(type='LINE')
-                    self.operator_modifier_add(col, 'NODES')
-                    col.menu_contents("OBJECT_MT_modifier_add_root_catalogs")
-                else:
-                    self.draw_category(col, title, groups[title])
+                self.draw_category(col, title, groups[title])
 
     def draw(self, context):
         layout = self.layout

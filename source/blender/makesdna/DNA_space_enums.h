@@ -156,6 +156,23 @@ enum eSpaceOutliner_Flag {
   SO_SKIP_SORT_ALPHA = (1 << 4),
   SO_SYNC_SELECT = (1 << 5),
   SO_MODE_COLUMN = (1 << 6),
+  /** Weld 3D: open the tree and scroll to the active object when it changes. */
+  SO_FOLLOW_ACTIVE = (1 << 7),
+};
+
+/** #SpaceOutliner.row_size (Weld 3D). */
+enum eSpaceOutliner_RowSize {
+  SO_ROW_NORMAL = 0,
+  SO_ROW_COMPACT = 1,
+  /** Taller rows with object thumbnails. */
+  SO_ROW_ROOMY = 2,
+};
+
+/** #SpaceOutliner.count_mode (Weld 3D). */
+enum eSpaceOutliner_CountMode {
+  SO_COUNT_NONE = 0,
+  SO_COUNT_FACES = 1,
+  SO_COUNT_TRIS = 2,
 };
 
 /** #SpaceOutliner.filter */

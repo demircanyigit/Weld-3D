@@ -12,6 +12,7 @@
 #include "BLI_enum_flags.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
 
 #include "DNA_scene_types.h"
 
@@ -152,6 +153,15 @@ void ED_view3d_to_m4(float mat[4][4], const float ofs[3], const float quat[4], f
  */
 void ED_view3d_from_m4(const float mat[4][4], float ofs[3], float quat[4], const float *dist);
 
+/**
+ * Frame the given objects in the 3D view `area`/`region` (smooth view), without changing the
+ * selection. Returns false when nothing could be framed.
+ */
+bool ED_view3d_frame_objects(bContext *C,
+                             ScrArea *area,
+                             ARegion *region,
+                             Span<Object *> objects,
+                             int smooth_viewtx);
 /**
  * Set the #RegionView3D members from an objects transformation and optionally lens.
  * \param ob: The object to set the view to.

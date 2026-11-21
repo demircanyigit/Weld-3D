@@ -64,6 +64,8 @@ void add_message(std::string &r_message, const std::string &message)
 /** Internal attributes. */
 constexpr const char *KEPT_ATTRIBUTE = ".edge_damage_kept";
 constexpr const char *WEIGHT_ATTRIBUTE = ".edge_damage_weight";
+/** The normals of the original, kept on the faces that come from it. */
+constexpr const char *NORMAL_ATTRIBUTE = ".edge_damage_normal";
 constexpr const char *PREVIEW_ATTRIBUTE = "EdgeDamagePreview";
 
 /** Distance to the nearest of randomly placed points, one per unit cell. About 0 to 1. */
@@ -330,6 +332,50 @@ void finish(Mesh &mesh, const EdgeDamageParams &params)
     }
     sharp.finish();
   }
+  if (params.smooth_shading) {
+    /* Edges inside the damage are smooth too, also where they come from sharp ones. */
+    const Span<int> corner_edges = mesh.corner_edges();
+    Array<bool> edge_kept(mesh.edges_num, false);
+    for (const int face : faces.index_range()) {
+      if (!damaged[face]) {
+        for (const int edge : corner_edges.slice(faces[face])) {
+          edge_kept[edge] = true;
+        }
+      }
+    }
+    if (bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_for_write_span<bool>(
+            "sharp_edge"))
+    {
+      if (sharp_edges.domain == bke::AttrDomain::Edge) {
+        for (const int edge : edge_kept.index_range()) {
+          if (!edge_kept[edge]) {
+            sharp_edges.span[edge] = false;
+          }
+        }
+      }
+      sharp_edges.finish();
+    }
+  }
+  {
+    /* The faces from the original keep its normals, so the shading around the damage looks as
+     * it did. The damage gets its own normals: a zero vector means the computed one. The normals
+     * the remeshed copy took from the original would point the wrong way on it. */
+    const VArraySpan<float3> original = *attributes.lookup<float3>(NORMAL_ATTRIBUTE,
+                                                                   bke::AttrDomain::Corner);
+    if (!original.is_empty()) {
+      Array<float3> corner_normals(mesh.corners_num, float3(0.0f));
+      for (const int face : faces.index_range()) {
+        if (!damaged[face]) {
+          for (const int corner : faces[face]) {
+            corner_normals[corner] = original[corner];
+          }
+        }
+      }
+      attributes.remove("custom_normal");
+      bke::mesh_set_custom_normals(mesh, corner_normals);
+    }
+  }
+  attributes.remove(NORMAL_ATTRIBUTE);
   if (params.visualize) {
     bke::SpanAttributeWriter<ColorGeometry4f> colors =
         attributes.lookup_or_add_for_write_only_span<ColorGeometry4f>(PREVIEW_ATTRIBUTE,
@@ -397,6 +443,10 @@ static Mesh *edge_damage_compute(const Mesh &mesh,
         KEPT_ATTRIBUTE, bke::AttrDomain::Face);
     kept.span.fill(true);
     kept.finish();
+    attributes.remove(NORMAL_ATTRIBUTE);
+    attributes.add<float3>(NORMAL_ATTRIBUTE,
+                           bke::AttrDomain::Corner,
+                           bke::AttributeInitVArray(VArray<float3>::from_span(mesh.corner_normals())));
     if (!params.weights.is_empty()) {
       bke::SpanAttributeWriter<float> weights =
           attributes.lookup_or_add_for_write_only_span<float>(WEIGHT_ATTRIBUTE,
@@ -541,6 +591,9 @@ Mesh *edge_damage(const Mesh &mesh, const EdgeDamageParams &params, std::string 
           sim_cache_get_value(hasher.finish(), [&]() {
             auto value = std::make_unique<EdgeDamageCachedValue>();
             value->mesh = edge_damage_compute(mesh, params, value->message);
+            if (value->mesh != nullptr) {
+              sim_cache_mesh_prepare(*value->mesh);
+            }
             return value;
           }));
   if (!value) {
@@ -550,7 +603,7 @@ Mesh *edge_damage(const Mesh &mesh, const EdgeDamageParams &params, std::string 
   if (value->mesh == nullptr) {
     return nullptr;
   }
-  return BKE_mesh_copy_for_eval(*value->mesh);
+  return sim_cache_mesh_copy(*value->mesh, mesh);
 }
 
 }  // namespace blender::geometry

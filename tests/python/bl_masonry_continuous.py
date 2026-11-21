@@ -35,7 +35,6 @@ def add_modifier(obj, continuous):
     mod.height = .13
     mod.depth = .045
     mod.mortar = .01
-    mod.use_backing = False
     assert not mod.use_continuous_walls, 'Existing files must retain per-face behavior by default'
     mod.use_continuous_walls = continuous
     return mod

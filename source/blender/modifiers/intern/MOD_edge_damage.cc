@@ -22,6 +22,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_deform.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
 #include "UI_interface_layout.hh"
@@ -77,8 +78,11 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   params.per_island = data.flag & MOD_EDGE_DAMAGE_PER_ISLAND;
   params.island_variation = data.island_variation;
   params.seed = data.seed;
-  params.material_index = data.material_index >= 0 && data.material_index < ctx->object->totcol ?
-                              data.material_index :
+  const int material_index = MOD_material_slot(
+      *mesh, data.material_index_pick, data.material_index);
+  params.material_index = material_index >= 0 &&
+                                  material_index < std::max<int>(ctx->object->totcol, mesh->totcol) ?
+                              material_index :
                               -1;
   params.smooth_shading = data.flag & MOD_EDGE_DAMAGE_SMOOTH_SHADING;
   params.visualize = data.flag & MOD_EDGE_DAMAGE_VISUALIZE;
@@ -108,6 +112,9 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 
   std::string message;
   Mesh *result = geometry::edge_damage(*mesh, params, message);
+  if (result != nullptr && result != mesh) {
+    MOD_material_slots_from(*result, *mesh);
+  }
   if (!message.empty()) {
     BKE_modifier_set_warning(ctx->object, md, "%s", message.c_str());
   }
@@ -177,7 +184,7 @@ static void output_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
   layout.use_property_split_set(true);
 
-  layout.prop(ptr, "material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_material_ui(layout, ptr, "material_index_pick", "material_index", std::nullopt);
   layout.prop(ptr, "use_smooth_shade", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "damage_attribute", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "visualize_damage", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -189,6 +196,12 @@ static void panel_register(ARegionType *region_type)
   modifier_subpanel_register(region_type, "remesh", "Remesh", nullptr, remesh_panel_draw, parent);
   modifier_subpanel_register(region_type, "noise", "Noise", nullptr, noise_panel_draw, parent);
   modifier_subpanel_register(region_type, "output", "Output", nullptr, output_panel_draw, parent);
+}
+
+static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
+{
+  EdgeDamageModifierData *pick_data = reinterpret_cast<EdgeDamageModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->material_index_pick), IDWALK_CB_USER);
 }
 
 ModifierTypeInfo modifierType_EdgeDamage = {
@@ -217,7 +230,7 @@ ModifierTypeInfo modifierType_EdgeDamage = {
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ nullptr,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,

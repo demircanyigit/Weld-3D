@@ -152,7 +152,10 @@ class OBJECT_MT_modifier_add_edit(ModifierAddMenu, Menu):
             self.operator_modifier_add(layout, 'VERTEX_WEIGHT_MIX')
             self.operator_modifier_add(layout, 'VERTEX_WEIGHT_PROXIMITY')
             self.operator_modifier_add_new(layout, (
-                'UVW_MAP', 'TENSION', 'VOLUME_SELECT', 'MATERIAL_BY_ELEMENT', 'MATERIALIZE', 'DATA_CHANNEL', 'PIECE_ID', 'EDIT_POLY', 'POLY_SELECT', 'POLY_EDIT',
+                'AUTO_WEIGHTS', 'SMOOTH_WEIGHTS', 'TRANSFER_WEIGHTS', 'BONE_COLORS',
+            ))
+            self.operator_modifier_add_new(layout, (
+                'UVW_MAP', 'TENSION', 'MASKS', 'VOLUME_SELECT', 'MATERIAL_BY_ELEMENT', 'MATERIALIZE', 'DATA_CHANNEL', 'PIECE_ID', 'EDIT_POLY', 'POLY_SELECT', 'POLY_EDIT',
                 'ELEMENT_ORDER', 'ELEMENT_PIVOT', 'SMART_UV_PROJECT',
             ))
         if ob_type == 'GREASEPENCIL':
@@ -200,7 +203,9 @@ class OBJECT_MT_modifier_add_generate(ModifierAddMenu, Menu):
                 'SLICE', 'CAP_HOLES', 'RADIAL_ARRAY', 'FACE_EXTRUDE', 'DELETE_MESH', 'QUADRANGULATE',
                 'PANELIZE', 'INSET', 'POKE', 'BEAUTIFY_FACES', 'ROTATE_EDGES', 'SYMMETRIZE',
                 'VORONOI_FRACTURE', 'DICE', 'COLLAPSE', 'DRAPE', 'SHATTER', 'MASONRY', 'STONEWORK', 'DISTRIBUTE', 'PLANKS', 'ROOF', 'EDGE_DAMAGE', 'DIVIDE', 'JOIN', 'BLAST', 'DISSOLVE', 'CLEANUP',
-                'SWEEP', 'TRIM', 'TILE',
+                'SWEEP', 'TRIM', 'TILE', 'PATCH', 'PACK', 'ROCK', 'SNOW', 'TREE', 'RESAMPLE', 'LEAN', 'CHISEL', 'FACESET', 'WRAP',
+                'PLACE', 'SCATTER',
+                'DENT', 'CONTACT', 'CABLE', 'CRACKS', 'COLLISION_HULL', 'BRICKS', 'UV_ROTATE',
             ))
         if ob_type == 'CURVES':
             self.operator_modifier_add_new(layout, ('NORMALIZE_SPLINE', 'CHAMFER_SPLINE', 'SWEEP'))
@@ -342,7 +347,7 @@ class OBJECT_MT_modifier_add_color(ModifierAddMenu, Menu):
 def _collider_modifier_from_context(context, name):
     owner = context.object
     modifier = owner.modifiers.get(name) if owner else None
-    return modifier if modifier and modifier.type in {'DRAPE', 'COLLAPSE'} else None
+    return modifier if modifier and modifier.type in {'DRAPE', 'COLLAPSE', 'LEAN'} else None
 
 
 class OBJECT_OT_collider_source_add(Operator):
@@ -495,6 +500,84 @@ class OBJECT_OT_join_modifier_source_add_selected(Operator):
         return {'FINISHED'}
 
 
+def _pack_modifier_from_context(context, name):
+    owner = context.object
+    modifier = owner.modifiers.get(name) if owner else None
+    return modifier if modifier and modifier.type == 'PACK' else None
+
+
+class OBJECT_OT_pack_object_add(Operator):
+    bl_idname = "object.pack_object_add"
+    bl_label = "Add Object"
+    bl_description = "Add a slot for one more object to pack"
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    modifier: bpy.props.StringProperty(options={'HIDDEN'})
+
+    def execute(self, context):
+        modifier = _pack_modifier_from_context(context, self.modifier)
+        if modifier is None:
+            return {'CANCELLED'}
+        modifier.objects.new()
+        return {'FINISHED'}
+
+
+class OBJECT_OT_pack_object_remove(Operator):
+    bl_idname = "object.pack_object_remove"
+    bl_label = "Remove Object"
+    bl_description = "Remove this object from the Pack modifier, without deleting it"
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    modifier: bpy.props.StringProperty(options={'HIDDEN'})
+    index: bpy.props.IntProperty(default=-1, options={'HIDDEN'})
+
+    def execute(self, context):
+        modifier = _pack_modifier_from_context(context, self.modifier)
+        if modifier is None or not 0 <= self.index < len(modifier.objects):
+            return {'CANCELLED'}
+        modifier.objects.remove(modifier.objects[self.index])
+        return {'FINISHED'}
+
+
+def _array_modifier_from_context(context, name):
+    owner = context.object
+    modifier = owner.modifiers.get(name) if owner else None
+    return modifier if modifier and modifier.type in {'ARRAY', 'RADIAL_ARRAY', 'PLACE', 'SCATTER'} else None
+
+
+class OBJECT_OT_array_object_add(Operator):
+    bl_idname = "object.array_object_add"
+    bl_label = "Add Object"
+    bl_description = "Add a slot for one more object to place"
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    modifier: bpy.props.StringProperty(options={'HIDDEN'})
+
+    def execute(self, context):
+        modifier = _array_modifier_from_context(context, self.modifier)
+        if modifier is None:
+            return {'CANCELLED'}
+        modifier.objects.new()
+        return {'FINISHED'}
+
+
+class OBJECT_OT_array_object_remove(Operator):
+    bl_idname = "object.array_object_remove"
+    bl_label = "Remove Object"
+    bl_description = "Remove this object from the list, without deleting it"
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    modifier: bpy.props.StringProperty(options={'HIDDEN'})
+    index: bpy.props.IntProperty(default=-1, options={'HIDDEN'})
+
+    def execute(self, context):
+        modifier = _array_modifier_from_context(context, self.modifier)
+        if modifier is None or not 0 <= self.index < len(modifier.objects):
+            return {'CANCELLED'}
+        modifier.objects.remove(modifier.objects[self.index])
+        return {'FINISHED'}
+
+
 class AddModifierMenu(Operator):
     bl_idname = "object.add_modifier_menu"
     bl_label = "Add Modifier"
@@ -509,7 +592,99 @@ class AddModifierMenu(Operator):
         return bpy.ops.wm.call_menu(name="OBJECT_MT_modifier_add")
 
 
+class OBJECT_OT_wrap_add(Operator):
+    bl_idname = "object.wrap_add"
+    bl_label = "Wrap"
+    bl_description = "Add straps wrapped round the active object. Draw or edit their lines as edges"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.active_object
+        return context.mode == 'OBJECT' and ob is not None and ob.type == 'MESH'
+
+    def execute(self, context):
+        target = context.active_object
+        mesh = bpy.data.meshes.new("Wrap")
+        ob = bpy.data.objects.new("Wrap", mesh)
+        ob.matrix_world = target.matrix_world.copy()
+        collections = target.users_collection or (context.collection,)
+        for collection in collections:
+            collection.objects.link(ob)
+        modifier = ob.modifiers.new("Wrap", 'WRAP')
+        modifier.target = target
+        modifier.lines = 'BOTH'
+        for selected in context.selected_objects:
+            selected.select_set(False)
+        ob.select_set(True)
+        context.view_layer.objects.active = ob
+        return {'FINISHED'}
+
+
+class OBJECT_OT_wrap_to_edges(Operator):
+    bl_idname = "object.wrap_to_edges"
+    bl_label = "To Edges"
+    bl_description = "Turn the pattern lines into edges of the mesh, to edit them by hand"
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    def execute(self, context):
+        import bmesh
+        ob = context.object
+        modifier = getattr(context, "modifier", None)
+        if modifier is None and ob is not None:
+            modifier = ob.modifiers.active
+        if ob is None or ob.type != 'MESH' or modifier is None or modifier.type != 'WRAP':
+            return {'CANCELLED'}
+        was_edit = ob.mode == 'EDIT'
+        if was_edit:
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Evaluate up to the wrap only, with the wrap giving its pattern lines.
+        hidden = []
+        after = False
+        for other in ob.modifiers:
+            if after and other.show_viewport:
+                other.show_viewport = False
+                hidden.append(other)
+            if other == modifier:
+                after = True
+        modifier.use_lines_only = True
+        depsgraph = context.evaluated_depsgraph_get()
+        depsgraph.update()
+        ob_eval = ob.evaluated_get(depsgraph)
+        lines = ob_eval.to_mesh()
+        coords = [v.co.copy() for v in lines.vertices]
+        edges = [tuple(e.vertices) for e in lines.edges]
+        ob_eval.to_mesh_clear()
+        modifier.use_lines_only = False
+        for other in hidden:
+            other.show_viewport = True
+
+        if edges:
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+            verts = [bm.verts.new(co) for co in coords]
+            for a, b in edges:
+                bm.edges.new((verts[a], verts[b]))
+            bm.to_mesh(ob.data)
+            bm.free()
+            ob.data.update()
+            modifier.lines = 'EDGES'
+        else:
+            self.report({'WARNING'}, "No pattern lines to turn into edges")
+
+        if was_edit:
+            bpy.ops.object.mode_set(mode='EDIT')
+        return {'FINISHED'}
+
+
 classes = (
+    OBJECT_OT_pack_object_add,
+    OBJECT_OT_pack_object_remove,
+    OBJECT_OT_array_object_add,
+    OBJECT_OT_array_object_remove,
+    OBJECT_OT_wrap_add,
+    OBJECT_OT_wrap_to_edges,
     OBJECT_OT_join_modifier_source_add,
     OBJECT_OT_join_modifier_source_remove,
     OBJECT_OT_join_modifier_source_add_selected,

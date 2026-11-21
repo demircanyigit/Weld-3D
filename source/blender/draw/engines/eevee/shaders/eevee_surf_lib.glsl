@@ -81,8 +81,12 @@ void init_globals()
   g_data.barycentric_dists = float3(0.0f);
 
 #ifdef GPU_FRAGMENT_SHADER
-  g_data.N = (gl_FrontFacing) ? g_data.N : -g_data.N;
-  g_data.Ni = (gl_FrontFacing) ? g_data.Ni : -g_data.Ni;
+  /* A back face only turns its normal around when that normal points away from the viewer.
+   * Plain faces shade as before, but bent normals (leaf cards) shade the same from both sides. */
+  const bool keep_normal = gl_FrontFacing ||
+                           dot(g_data.N, drw_world_incident_vector(g_data.P)) > 0.0f;
+  g_data.N = keep_normal ? g_data.N : -g_data.N;
+  g_data.Ni = keep_normal ? g_data.Ni : -g_data.Ni;
   g_data.Ng = safe_normalize(cross(gpu_dfdx(g_data.P), gpu_dfdy(g_data.P)));
   if (uniform_buf.pipeline.is_main_view_inverted) {
     g_data.Ng = -g_data.Ng;

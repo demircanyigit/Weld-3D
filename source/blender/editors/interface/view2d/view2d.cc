@@ -18,6 +18,7 @@
 
 #include "BLI_link_utils.h"
 #include "BLI_listbase.h"
+#include "BLI_math_color.h"
 #include "BLI_math_matrix.h"
 #include "BLI_memarena.h"
 #include "BLI_rect.h"
@@ -1283,6 +1284,122 @@ static void grid_axis_start_and_count(
   else {
     *r_count = (max - *r_start) / step + 1;
   }
+}
+
+void view2d_line_grid_draw(const View2D *v2d,
+                           const int grid_color_id,
+                           const float min_step,
+                           const int grid_subdivisions)
+{
+  if (grid_subdivisions <= 0 || min_step <= 0.0f) {
+    return;
+  }
+
+  /* Each level of lines is five times further apart than the one below. */
+  const int subdivision_scale = 5;
+  /* Max level a line can belong to, the lines through the origin belong to all of them. */
+  const int max_level = 24;
+  /* The finest lines show once they are this far apart on screen, more subdivisions show finer
+   * lines. */
+  const float min_px = (grid_subdivisions >= 3 ? 8.0f : (grid_subdivisions == 2 ? 14.0f : 26.0f)) *
+                       U.pixelsize;
+  /* Lines this far apart on screen and more are drawn at full strength. */
+  const float strong_px = 200.0f * U.pixelsize;
+  const float max_alpha = 0.8f;
+
+  float base_color[3];
+  theme::get_color_3fv(grid_color_id, base_color);
+  uchar rgb[3];
+  rgb_float_to_uchar(rgb, base_color);
+
+  const float zoom_x = float(BLI_rcti_size_x(&v2d->mask) + 1) / BLI_rctf_size_x(&v2d->cur);
+  const float zoom_y = float(BLI_rcti_size_y(&v2d->mask) + 1) / BLI_rctf_size_y(&v2d->cur);
+  if (!(zoom_x > 0.0f) || !(zoom_y > 0.0f)) {
+    return;
+  }
+
+  /* Strength of a line from how far apart the lines of its level are on screen. */
+  const auto alpha_for = [&](const float spacing_px) -> uchar {
+    if (spacing_px <= min_px) {
+      return 0;
+    }
+    const float t = clamp_f(logf(spacing_px / min_px) / logf(strong_px / min_px), 0.0f, 1.0f);
+    return uchar(max_alpha * t * (2.0f - t) * 255.0f);
+  };
+
+  struct Axis {
+    float step;
+    int first;
+    int last;
+    int level;
+    float zoom;
+  };
+  const auto axis = [&](const float min, const float max, const float zoom) {
+    Axis a;
+    a.zoom = zoom;
+    /* The finest level whose lines are far enough apart to show. */
+    const float level_f = logf(min_px / (min_step * zoom)) / logf(float(subdivision_scale));
+    a.level = std::clamp(int(ceilf(level_f)), 0, max_level);
+    a.step = min_step * powf(float(subdivision_scale), float(a.level));
+    a.first = int(ceilf(min / a.step));
+    a.last = int(floorf(max / a.step));
+    return a;
+  };
+  const Axis ax = axis(v2d->cur.xmin, v2d->cur.xmax, zoom_x);
+  const Axis ay = axis(v2d->cur.ymin, v2d->cur.ymax, zoom_y);
+  const int count_x = std::max(ax.last - ax.first + 1, 0);
+  const int count_y = std::max(ay.last - ay.first + 1, 0);
+  if (count_x + count_y == 0) {
+    return;
+  }
+
+  /* Each line is drawn once, at the strength of the coarsest level it is on. */
+  const auto line_alpha = [&](const Axis &a, const int i) {
+    int level = a.level;
+    int k = i;
+    while (level < max_level && (k == 0 || k % subdivision_scale == 0)) {
+      if (k != 0) {
+        k /= subdivision_scale;
+      }
+      level++;
+    }
+    return alpha_for(min_step * powf(float(subdivision_scale), float(level)) * a.zoom);
+  };
+
+  GPUVertFormat *format = immVertexFormat();
+  const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  const uint color = GPU_vertformat_attr_add(format, "color", gpu::VertAttrType::UNORM_8_8_8_8);
+
+  GPU_blend(GPU_BLEND_ALPHA);
+  GPU_line_width(1.0f);
+  immBindBuiltinProgram(GPU_SHADER_3D_FLAT_COLOR);
+  immBeginAtMost(GPU_PRIM_LINES, 2 * (count_x + count_y));
+
+  for (int i = ax.first; i <= ax.last; i++) {
+    const uchar alpha = line_alpha(ax, i);
+    if (alpha == 0) {
+      continue;
+    }
+    const float x = float(i) * ax.step;
+    immAttr4ub(color, UNPACK3(rgb), alpha);
+    immVertex2f(pos, x, v2d->cur.ymin);
+    immAttr4ub(color, UNPACK3(rgb), alpha);
+    immVertex2f(pos, x, v2d->cur.ymax);
+  }
+  for (int i = ay.first; i <= ay.last; i++) {
+    const uchar alpha = line_alpha(ay, i);
+    if (alpha == 0) {
+      continue;
+    }
+    const float y = float(i) * ay.step;
+    immAttr4ub(color, UNPACK3(rgb), alpha);
+    immVertex2f(pos, v2d->cur.xmin, y);
+    immAttr4ub(color, UNPACK3(rgb), alpha);
+    immVertex2f(pos, v2d->cur.xmax, y);
+  }
+
+  immEnd();
+  immUnbindProgram();
 }
 
 void view2d_dot_grid_draw(const View2D *v2d,

@@ -1,6 +1,6 @@
 # About Weld 3D
 
-Weld 3D is an unofficial build based on the Blender `v5.1.0` tag. It adds 74 modifiers and a list view of the
+Weld 3D is an unofficial build based on the Blender `v5.1.0` tag. It adds 75 modifiers and a list view of the
 modifier stack, new geometry nodes, the Toolbox and Shelf editors, more color attribute options for
 the Solid shading mode, and the classic 2.79 look with colored icons and embossed widgets. It isn't
 made or supported by the Blender Foundation. The [main read-me](../../README.md) lists everything.
@@ -22,6 +22,9 @@ made or supported by the Blender Foundation. The [main read-me](../../README.md)
 - [Symmetrize](SYMMETRIZE.md)
 - [Sweep](SWEEP.md)
 - [Trim](TRIM.md)
+- [Patch](PATCH.md)
+- [Pack](PACK.md)
+- [Rock](ROCK.md)
 - [Dice](DICE.md)
 - [Divide](DIVIDE.md)
 - [Join](JOIN.md)
@@ -39,6 +42,9 @@ made or supported by the Blender Foundation. The [main read-me](../../README.md)
 - [Edge Damage](EDGE_DAMAGE.md)
 - [Dissolve](DISSOLVE.md)
 - [Decimate algorithms](DECIMATE.md)
+- [Boolean additions](BOOLEAN.md)
+- [Bevel additions](BEVEL.md)
+- [Solidify additions](SOLIDIFY.md)
 
 **Modifiers: selection and editing in the stack**
 
@@ -85,6 +91,13 @@ made or supported by the Blender Foundation. The [main read-me](../../README.md)
 - [Data Channel](DATA_CHANNEL.md)
 - [Piece ID](PIECE_ID.md)
 - [Tension](TENSION.md)
+
+**Modifiers: weights**
+
+- [Auto Weights](AUTO_WEIGHTS.md)
+- [Smooth Weights](SMOOTH_WEIGHTS.md)
+- [Transfer Weights](TRANSFER_WEIGHTS.md)
+- [Bone Colors](BONE_COLORS.md)
 
 **Modifiers: curves**
 

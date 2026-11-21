@@ -381,6 +381,19 @@ static void rna_grease_pencil_update(Main * /*bmain*/, Scene * /*scene*/, Pointe
   }
 }
 
+/* Weld 3D: `Object.color_tag` stores the collection color tag plus one, so 0 is "none". */
+static int rna_Object_color_tag_get(PointerRNA *ptr)
+{
+  const Object *ob = static_cast<const Object *>(ptr->data);
+  return int(ob->outliner_color) - 1;
+}
+
+static void rna_Object_color_tag_set(PointerRNA *ptr, int value)
+{
+  Object *ob = static_cast<Object *>(ptr->data);
+  ob->outliner_color = char(value + 1);
+}
+
 static void rna_Object_matrix_world_get(PointerRNA *ptr, float *values)
 {
   Object *ob = static_cast<Object *>(ptr->data);
@@ -3564,6 +3577,19 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_Object_instance_type_itemf");
   RNA_def_property_ui_text(prop, "Instance Type", "If not None, object instancing method to use");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_dependency_update");
+
+  prop = RNA_def_property(srna, "is_group", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "transflag", OB_TRANSFLAG_GROUP);
+  RNA_def_property_ui_text(
+      prop, "Group", "This empty is a group, made with Group and removed with Ungroup");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, nullptr);
+
+  prop = RNA_def_property(srna, "color_tag", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_collection_color_items);
+  RNA_def_property_enum_funcs(
+      prop, "rna_Object_color_tag_get", "rna_Object_color_tag_set", nullptr);
+  RNA_def_property_ui_text(prop, "Color Tag", "Color tag shown for the object in the outliner");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, nullptr);
 
   prop = RNA_def_property(srna, "use_instance_vertices_rotation", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "transflag", OB_DUPLIROT);

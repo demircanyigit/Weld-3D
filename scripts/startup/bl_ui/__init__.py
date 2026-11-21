@@ -18,6 +18,8 @@ _modules = [
     "node_add_menu_geometry",
     "node_add_menu_shader",
     "node_add_menu_texture",
+    "node_add_menu_texture_graph",
+    "node_add_menu_tree_graph",
     "properties_animviz",
     "properties_constraint",
     "properties_data_armature",
@@ -80,6 +82,7 @@ _modules = [
     "space_info",
     "space_nla",
     "space_node",
+    "space_node_library",
     "space_outliner",
     "space_properties",
     "space_sequencer",
@@ -128,6 +131,7 @@ def register():
 
     space_filebrowser.register_props()
     space_toolbox.register_tabs()
+    space_node_library.register_props()
     properties_data_modifier_list.register_menus()
 
     from bpy.props import (

@@ -258,6 +258,7 @@ set(SRC
   engines/overlay/overlay_force_field.hh
   engines/overlay/overlay_grease_pencil.hh
   engines/overlay/overlay_grid.hh
+  engines/overlay/overlay_group.hh
   engines/overlay/overlay_image.hh
   engines/overlay/overlay_instance.hh
   engines/overlay/overlay_lattice.hh

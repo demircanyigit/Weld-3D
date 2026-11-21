@@ -97,6 +97,7 @@
 #include "ANIM_bone_collections.hh"
 
 #include "GEO_merge_layers.hh"
+#include "GEO_realize_instances.hh"
 
 #include "UI_interface.hh"
 
@@ -841,6 +842,12 @@ static Mesh *create_applied_mesh_for_modifier(Depsgraph *depsgraph,
       bke::GeometrySet geometry_set = bke::GeometrySet::from_mesh(
           mesh_temp, bke::GeometryOwnershipType::Owned);
       mti->modify_geometry_set(md_eval, &mectx, &geometry_set);
+      /* Objects a modifier places as instances become real mesh, so applying keeps them. */
+      if (geometry_set.has_instances()) {
+        geometry_set = geometry::realize_instances(geometry_set,
+                                                   geometry::RealizeInstancesOptions())
+                           .geometry;
+      }
       if (!geometry_set.has_mesh()) {
         BKE_report(reports, RPT_ERROR, "Evaluated geometry from modifier does not contain a mesh");
         return nullptr;
@@ -2315,6 +2322,188 @@ void OBJECT_OT_modifier_copy(wmOperatorType *ot)
 /** \} */
 
 /* ------------------------------------------------------------------- */
+/** \name Bake and Unbake Modifier Operators
+ *
+ * A baked modifier keeps the result of the stack up to and including it as a mesh, and the stack
+ * starts from that mesh instead of calculating those modifiers again.
+ * \{ */
+
+static void modifier_bake_clear(Main *bmain, ModifierData *md)
+{
+  Mesh *bake = md->bake_mesh;
+  if (bake == nullptr) {
+    return;
+  }
+  md->bake_mesh = nullptr;
+  id_us_min(&bake->id);
+  if (bake->id.us == 0) {
+    BKE_id_delete(bmain, bake);
+  }
+}
+
+/** The result of the stack up to and including \a md, calculated with the modifiers after it
+ * turned off. */
+static Mesh *modifier_bake_evaluate(bContext *C, Object *ob, ModifierData *md)
+{
+  Vector<std::pair<ModifierData *, int>> modes;
+  for (ModifierData *other = md->next; other; other = other->next) {
+    modes.append({other, other->mode});
+    other->mode &= ~eModifierMode_Realtime;
+  }
+  modes.append({md, md->mode});
+  md->mode |= eModifierMode_Realtime;
+  const short modifier_flag = ob->modifier_flag;
+  ob->modifier_flag &= ~OB_MODIFIER_FLAG_STOP_AT_ACTIVE;
+  /* Bake again from the modifiers, not from the old bake. */
+  Mesh *old_bake = md->bake_mesh;
+  md->bake_mesh = nullptr;
+
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
+  const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
+  Mesh *result = mesh_eval ? BKE_mesh_copy_for_eval(*mesh_eval) : nullptr;
+
+  for (const auto &[other, mode] : modes) {
+    other->mode = mode;
+  }
+  ob->modifier_flag = modifier_flag;
+  md->bake_mesh = old_bake;
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  return result;
+}
+
+static bool modifier_bake_poll(bContext *C)
+{
+  return edit_modifier_poll_generic(C, RNA_Modifier, (1 << OB_MESH), false, false);
+}
+
+static wmOperatorStatus modifier_bake_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "modifier", name);
+
+  bool changed = false;
+  for (const PointerRNA &ptr : modifier_get_edit_objects(*C, *op)) {
+    Object *ob = static_cast<Object *>(ptr.data);
+    if (ob->type != OB_MESH) {
+      continue;
+    }
+    ModifierData *md = BKE_modifiers_findby_name(ob, name);
+    if (md == nullptr) {
+      continue;
+    }
+    Mesh *result = modifier_bake_evaluate(C, ob, md);
+    if (result == nullptr) {
+      BKE_reportf(op->reports, RPT_ERROR, "Nothing to bake on %s", ob->id.name + 2);
+      continue;
+    }
+    /* Attributes only used inside the stack have no meaning on the baked mesh. */
+    result->attributes_for_write().remove_anonymous();
+
+    modifier_bake_clear(bmain, md);
+    Mesh *bake = BKE_id_new<Mesh>(bmain, md->name);
+    BKE_mesh_nomain_to_mesh(result, bake, nullptr, false);
+    /* The modifier keeps the one user the new mesh starts with. */
+    md->bake_mesh = bake;
+    changed = true;
+
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  if (!changed) {
+    return OPERATOR_CANCELLED;
+  }
+  DEG_relations_tag_update(bmain);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus modifier_bake_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  wmOperatorStatus retval;
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
+    return modifier_bake_exec(C, op);
+  }
+  return retval;
+}
+
+void OBJECT_OT_modifier_bake(wmOperatorType *ot)
+{
+  ot->name = "Bake Modifier";
+  ot->description =
+      "Save the result of the stack up to this modifier, so it is not calculated again until "
+      "unbaked";
+  ot->idname = "OBJECT_OT_modifier_bake";
+
+  ot->invoke = modifier_bake_invoke;
+  ot->exec = modifier_bake_exec;
+  ot->poll = modifier_bake_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+  modifier_register_use_selected_objects_prop(ot);
+}
+
+static bool modifier_unbake_poll(bContext *C)
+{
+  return edit_modifier_poll_generic(C, RNA_Modifier, (1 << OB_MESH), true, false);
+}
+
+static wmOperatorStatus modifier_unbake_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "modifier", name);
+
+  bool changed = false;
+  for (const PointerRNA &ptr : modifier_get_edit_objects(*C, *op)) {
+    Object *ob = static_cast<Object *>(ptr.data);
+    ModifierData *md = BKE_modifiers_findby_name(ob, name);
+    if (md == nullptr || md->bake_mesh == nullptr) {
+      continue;
+    }
+    modifier_bake_clear(bmain, md);
+    changed = true;
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  }
+
+  if (!changed) {
+    return OPERATOR_CANCELLED;
+  }
+  DEG_relations_tag_update(bmain);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus modifier_unbake_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  wmOperatorStatus retval;
+  if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
+    return modifier_unbake_exec(C, op);
+  }
+  return retval;
+}
+
+void OBJECT_OT_modifier_unbake(wmOperatorType *ot)
+{
+  ot->name = "Unbake Modifier";
+  ot->description = "Remove the saved result, so the modifiers are calculated again";
+  ot->idname = "OBJECT_OT_modifier_unbake";
+
+  ot->invoke = modifier_unbake_invoke;
+  ot->exec = modifier_unbake_exec;
+  ot->poll = modifier_unbake_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+  modifier_register_use_selected_objects_prop(ot);
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
 /** \name Set Active Modifier Operator
  * \{ */
 
@@ -3471,6 +3660,80 @@ void OBJECT_OT_surfacedeform_bind(wmOperatorType *ot)
   ot->exec = surfacedeform_bind_exec;
 
   /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+  edit_modifier_properties(ot);
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Auto Weights Bind Operator
+ * \{ */
+
+static bool auto_weights_bind_poll(bContext *C)
+{
+  return edit_modifier_poll_generic(C, RNA_AutoWeightsModifier, 0, true, false);
+}
+
+static wmOperatorStatus auto_weights_bind_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = context_active_object(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  AutoWeightsModifierData *amd = reinterpret_cast<AutoWeightsModifierData *>(
+      edit_modifier_property_get(op, ob, eModifierType_AutoWeights));
+  if (amd == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (amd->bind_verts_num > 0) {
+    /* Unbind. */
+    MEM_SAFE_DELETE(amd->bind_bones);
+    MEM_SAFE_DELETE(amd->bind_offsets);
+    MEM_SAFE_DELETE(amd->bind_groups);
+    MEM_SAFE_DELETE(amd->bind_weights);
+    amd->bind_verts_num = 0;
+    amd->bind_bones_num = 0;
+    amd->bind_weights_num = 0;
+  }
+  else {
+    if (amd->object == nullptr) {
+      BKE_report(op->reports, RPT_ERROR, "Pick an armature first");
+      return OPERATOR_CANCELLED;
+    }
+    AutoWeightsModifierData *amd_eval = reinterpret_cast<AutoWeightsModifierData *>(
+        BKE_modifier_get_evaluated(depsgraph, ob, &amd->modifier));
+    amd_eval->flag |= MOD_AUTOWEIGHTS_BIND_REQUEST;
+    WM_cursor_wait(true);
+    /* Runs the modifier, which binds (this has to happen outside of depsgraph evaluation). */
+    object_force_modifier_bind_simple_options(depsgraph, ob, &amd->modifier);
+    WM_cursor_wait(false);
+  }
+
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus auto_weights_bind_invoke(bContext *C,
+                                                 wmOperator *op,
+                                                 const wmEvent * /*event*/)
+{
+  if (edit_modifier_invoke_properties(C, op)) {
+    return auto_weights_bind_exec(C, op);
+  }
+  return OPERATOR_CANCELLED;
+}
+
+void OBJECT_OT_auto_weights_bind(wmOperatorType *ot)
+{
+  ot->name = "Auto Weights Bind";
+  ot->description = "Work out the weights of each bone, or clear them";
+  ot->idname = "OBJECT_OT_auto_weights_bind";
+
+  ot->poll = auto_weights_bind_poll;
+  ot->invoke = auto_weights_bind_invoke;
+  ot->exec = auto_weights_bind_exec;
+
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
 }

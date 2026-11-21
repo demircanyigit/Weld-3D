@@ -670,7 +670,10 @@ static void outliner_collections_children_sort(ListBaseT<TreeElement> *lb)
         tp++;
       }
 
-      qsort(tear, totelem, sizeof(tTreeSort), treesort_child_not_in_collection);
+      /* Weld 3D: stable, so the manual object order (the collection's object list) is kept. */
+      std::stable_sort(tear, tear + totelem, [](const tTreeSort &a, const tTreeSort &b) {
+        return treesort_child_not_in_collection(&a, &b) < 0;
+      });
 
       BLI_listbase_clear(lb);
       tp = tear;
@@ -794,7 +797,7 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
         space_outliner, te, view_co_limit, callback_test);
     if (te_sub != nullptr) {
       /* Skip the element if it was not visible to start with. */
-      if (te->ys + UI_UNIT_Y > view_co_limit) {
+      if (te->ys + OL_ROWH > view_co_limit) {
         return te_sub;
       }
       return nullptr;

@@ -26,6 +26,7 @@
 #include "DNA_particle_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_vfont_types.h"
+#include "DNA_view3d_types.h"
 
 #include "BLI_kdtree.hh"
 #include "BLI_linklist.h"
@@ -34,6 +35,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
+#include "BLI_set.hh"
+#include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
@@ -87,7 +90,9 @@
 #include "ED_grease_pencil.hh"
 #include "ED_mesh.hh"
 #include "ED_object.hh"
+#include "ED_outliner.hh"
 #include "ED_screen.hh"
+#include "ED_select_utils.hh"
 #include "ED_view3d.hh"
 
 #include "ANIM_action.hh"
@@ -3228,5 +3233,290 @@ void OBJECT_OT_unlink_data(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Group / Ungroup Operators (Weld 3D)
+ *
+ * A group is an empty marked with #OB_TRANSFLAG_GROUP that the grouped objects are parented to,
+ * so moving the group moves everything in it. Ungroup gives the children to the group's own
+ * parent (keeping their transforms) and deletes the empty.
+ * \{ */
+
+enum {
+  GROUP_PIVOT_BOUNDS = 0,
+  GROUP_PIVOT_ACTIVE = 1,
+  GROUP_PIVOT_WORLD = 2,
+  GROUP_PIVOT_BOTTOM = 3,
+  GROUP_PIVOT_CURSOR = 4,
+};
+
+static const EnumPropertyItem prop_group_pivot_items[] = {
+    {GROUP_PIVOT_BOUNDS, "BOUNDS_CENTER", 0, "Center", "Place the group in the middle of the objects"},
+    {GROUP_PIVOT_BOTTOM,
+     "BOUNDS_BOTTOM",
+     0,
+     "Bottom",
+     "Place the group at the bottom middle of the objects, where they stand on the ground"},
+    {GROUP_PIVOT_ACTIVE, "ACTIVE", 0, "Active Object", "Place the group at the origin of the active object"},
+    {GROUP_PIVOT_CURSOR, "CURSOR", 0, "3D Cursor", "Place the group at the 3D cursor"},
+    {GROUP_PIVOT_WORLD, "WORLD", 0, "World Origin", "Place the group at the world origin"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static bool object_is_in_set_recursive(const Object *ob, const Set<Object *> &objects)
+{
+  for (const Object *par = ob->parent; par; par = par->parent) {
+    if (objects.contains(const_cast<Object *>(par))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static wmOperatorStatus object_group_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  View3D *v3d = CTX_wm_view3d(C);
+  Object *ob_active = CTX_data_active_object(C);
+  const int pivot = RNA_enum_get(op->ptr, "pivot");
+
+  Vector<Object *> selected;
+  CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
+    selected.append(ob);
+  }
+  CTX_DATA_END;
+
+  if (selected.is_empty()) {
+    BKE_report(op->reports, RPT_WARNING, "No objects selected to group");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Only the top-most selected objects are parented, their children come along. */
+  Set<Object *> selected_set;
+  for (Object *ob : selected) {
+    selected_set.add(ob);
+  }
+  Vector<Object *> top;
+  for (Object *ob : selected) {
+    if (!object_is_in_set_recursive(ob, selected_set)) {
+      top.append(ob);
+    }
+  }
+
+  /* If all of them share a parent, the group goes under that parent (nested groups). */
+  Object *common_parent = top[0]->parent;
+  for (Object *ob : top) {
+    if (ob->parent != common_parent) {
+      common_parent = nullptr;
+      break;
+    }
+  }
+
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+
+  float3 location(0.0f);
+  if (ELEM(pivot, GROUP_PIVOT_BOUNDS, GROUP_PIVOT_BOTTOM)) {
+    float3 min(FLT_MAX), max(-FLT_MAX);
+    for (Object *ob : top) {
+      Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
+      BKE_object_minmax(ob_eval ? ob_eval : ob, min, max);
+    }
+    location = (min + max) * 0.5f;
+    if (pivot == GROUP_PIVOT_BOTTOM) {
+      location.z = min.z;
+    }
+  }
+  else if (pivot == GROUP_PIVOT_CURSOR) {
+    location = float3(scene->cursor.location);
+  }
+  else if (pivot == GROUP_PIVOT_ACTIVE) {
+    Object *ob_pivot = (ob_active && selected_set.contains(ob_active)) ? ob_active : top[0];
+    location = ob_pivot->object_to_world().location();
+  }
+
+  /* The group lives in the collection of the active (or first) object. */
+  Object *ob_home = (ob_active && selected_set.contains(ob_active)) ? ob_active : top[0];
+  Collection *collection = BKE_collection_object_find(bmain, scene, nullptr, ob_home);
+
+  const float rot[3] = {0.0f, 0.0f, 0.0f};
+  const ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uid : 0;
+  Object *group = add_type(C, OB_EMPTY, DATA_("Group"), location, rot, false, local_view_bits);
+  group->transflag |= OB_TRANSFLAG_GROUP;
+  group->empty_drawtype = OB_PLAINAXES;
+
+  if (collection && !BKE_collection_has_object(collection, group)) {
+    BKE_collection_object_move(bmain, scene, collection, nullptr, group);
+  }
+  DEG_relations_tag_update(bmain);
+
+  if (common_parent) {
+    parent_set(op->reports, C, scene, group, common_parent, PAR_OBJECT, false, true, nullptr);
+  }
+
+  int grouped = 0;
+  for (Object *ob : top) {
+    if (parent_set(op->reports, C, scene, ob, group, PAR_OBJECT, false, true, nullptr)) {
+      grouped++;
+    }
+  }
+
+  /* Select only the group, like other group nodes. */
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  base_deselect_all(scene, view_layer, v3d, SEL_DESELECT);
+  if (Base *base = BKE_view_layer_base_find(view_layer, group)) {
+    base_select(base, BA_SELECT);
+    base_activate(C, base);
+  }
+
+  DEG_relations_tag_update(bmain);
+  DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+  WM_event_add_notifier(C, NC_OBJECT | ND_PARENT, nullptr);
+  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, nullptr);
+  ED_outliner_select_sync_from_object_tag(C);
+
+  BKE_reportf(op->reports, RPT_INFO, "Grouped %d object(s)", grouped);
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_group(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Group";
+  ot->description = "Put the selected objects in a new group that moves them together";
+  ot->idname = "OBJECT_OT_group";
+
+  /* API callbacks. */
+  ot->invoke = WM_menu_invoke;
+  ot->exec = object_group_exec;
+  ot->poll = ED_operator_objectmode;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  ot->prop = RNA_def_enum(ot->srna,
+                          "pivot",
+                          prop_group_pivot_items,
+                          GROUP_PIVOT_BOUNDS,
+                          "Pivot",
+                          "Where to place the new group");
+}
+
+static wmOperatorStatus object_ungroup_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  View3D *v3d = CTX_wm_view3d(C);
+
+  Vector<Object *> groups;
+  CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
+    if (ob->transflag & OB_TRANSFLAG_GROUP) {
+      groups.append(ob);
+    }
+  }
+  CTX_DATA_END;
+
+  if (groups.is_empty()) {
+    BKE_report(op->reports, RPT_WARNING, "No groups selected");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Children need up to date world matrices to keep their place. */
+  CTX_data_ensure_evaluated_depsgraph(C);
+
+  Vector<Object *> released;
+  Set<Object *> removed_groups;
+  int removed = 0;
+  bool kept_any = false;
+
+  for (Object *group : groups) {
+    Vector<Object *> children;
+    for (Object &ob : bmain->objects) {
+      if (ob.parent == group) {
+        children.append(&ob);
+      }
+    }
+
+    bool all_released = true;
+    for (Object *child : children) {
+      if (!BKE_id_is_editable(bmain, &child->id)) {
+        all_released = false;
+        continue;
+      }
+      /* A selected group inside this one is moved up here and then ungrouped on its own. */
+      if (group->parent) {
+        parent_set(op->reports, C, scene, child, group->parent, PAR_OBJECT, false, true, nullptr);
+      }
+      else {
+        parent_clear(child, CLEAR_PARENT_KEEP_TRANSFORM);
+      }
+      released.append(child);
+    }
+
+    if (all_released) {
+      removed_groups.add(group);
+      base_free_and_unlink(bmain, scene, group);
+      removed++;
+    }
+    else {
+      kept_any = true;
+    }
+  }
+
+  /* Select what was in the groups. */
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  base_deselect_all(scene, view_layer, v3d, SEL_DESELECT);
+  /* Groups inside groups may have been removed after being released, skip those. */
+  released.remove_if([&](Object *ob) { return removed_groups.contains(ob); });
+  for (Object *ob : released) {
+    if (Base *base = BKE_view_layer_base_find(view_layer, ob)) {
+      base_select(base, BA_SELECT);
+    }
+  }
+  if (!released.is_empty()) {
+    if (Base *base = BKE_view_layer_base_find(view_layer, released[0])) {
+      base_activate(C, base);
+    }
+  }
+
+  if (kept_any) {
+    BKE_report(op->reports,
+               RPT_WARNING,
+               "Some groups were kept because they hold objects that cannot be edited");
+  }
+
+  DEG_relations_tag_update(bmain);
+  DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
+  WM_event_add_notifier(C, NC_OBJECT | ND_PARENT, nullptr);
+  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, nullptr);
+  ED_outliner_select_sync_from_object_tag(C);
+
+  BKE_reportf(op->reports, RPT_INFO, "Removed %d group(s)", removed);
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_ungroup(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Ungroup";
+  ot->description = "Take the objects out of the selected groups and remove the groups";
+  ot->idname = "OBJECT_OT_ungroup";
+
+  /* API callbacks. */
+  ot->exec = object_ungroup_exec;
+  ot->poll = ED_operator_objectmode;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
 
 }  // namespace blender::ed::object

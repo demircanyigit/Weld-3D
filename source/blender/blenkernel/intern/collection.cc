@@ -1765,6 +1765,53 @@ void BKE_collections_child_remove_nulls(Main *bmain,
   }
 }
 
+bool BKE_collection_object_reorder(Main *bmain,
+                                   Collection *collection,
+                                   Object *ob,
+                                   Object *ob_relative,
+                                   const bool after)
+{
+  if (ob == ob_relative) {
+    return false;
+  }
+  collection_gobject_hash_ensure(collection);
+  CollectionObject **cob_p = collection->runtime->gobject_hash->lookup_ptr(ob);
+  if (cob_p == nullptr) {
+    return false;
+  }
+  CollectionObject *cob = *cob_p;
+  CollectionObject *cob_relative = nullptr;
+  if (ob_relative) {
+    CollectionObject **cob_relative_p = collection->runtime->gobject_hash->lookup_ptr(
+        ob_relative);
+    if (cob_relative_p == nullptr) {
+      return false;
+    }
+    cob_relative = *cob_relative_p;
+  }
+
+  BLI_remlink(&collection->gobject, cob);
+  if (cob_relative == nullptr) {
+    if (after) {
+      BLI_addtail(&collection->gobject, cob);
+    }
+    else {
+      BLI_addhead(&collection->gobject, cob);
+    }
+  }
+  else if (after) {
+    BLI_insertlinkafter(&collection->gobject, cob_relative, cob);
+  }
+  else {
+    BLI_insertlinkbefore(&collection->gobject, cob_relative, cob);
+  }
+
+  /* The object cache (and so the view layer bases) follows the list order. */
+  BKE_collection_object_cache_free(bmain, collection, 0);
+  BKE_main_collection_sync(bmain);
+  return true;
+}
+
 void BKE_collection_object_move(
     Main *bmain, Scene *scene, Collection *collection_dst, Collection *collection_src, Object *ob)
 {

@@ -63,8 +63,8 @@ The menu button in the header has:
 ## Adding modifiers
 
 **Add Modifier** above the list opens every mesh modifier in one menu of columns: Edit, Build,
-Topology, Elements, Deform and Shape on top, and Smooth, Normals, UV, Data, Select and Physics
-under them. The search button next to it finds a modifier by name.
+Topology, Elements, Deform and Shape on top, and Smooth, Normals, Weights, UV, Data, Select and
+Physics under them. Weights holds the weight modifiers, including the Vertex Weight ones. The search button next to it finds a modifier by name.
 
 ![The Add menu of the Modifier List](images/ui_modifier_add_menu.png)
 

@@ -442,14 +442,14 @@ static wmOperatorStatus outliner_item_rename_invoke(bContext *C,
   /* Force element into view. */
   outliner_show_active(space_outliner, region, te, TREESTORE(te)->id);
 
-  if (te->ys < int(v2d->cur.ymin + UI_UNIT_Y)) {
+  if (te->ys < int(v2d->cur.ymin + OL_ROWH)) {
     /* Try to show one full row below. */
-    const int delta_y = te->ys - int(v2d->cur.ymin + UI_UNIT_Y);
+    const int delta_y = te->ys - int(v2d->cur.ymin + OL_ROWH);
     outliner_scroll_view(space_outliner, region, delta_y);
   }
-  else if (te->ys > int(v2d->cur.ymax - (UI_UNIT_Y * 2.0f))) {
+  else if (te->ys > int(v2d->cur.ymax - (OL_ROWH * 2.0f))) {
     /* Try to show one full row above. */
-    const int delta_y = te->ys - int(v2d->cur.ymax - (UI_UNIT_Y * 2.0f));
+    const int delta_y = te->ys - int(v2d->cur.ymax - (OL_ROWH * 2.0f));
     outliner_scroll_view(space_outliner, region, delta_y);
   }
 
@@ -678,7 +678,7 @@ static int outliner_id_delete_tag(bContext *C,
 {
   int id_tagged_num = 0;
 
-  if (mval[1] > te->ys && mval[1] < te->ys + UI_UNIT_Y) {
+  if (mval[1] > te->ys && mval[1] < te->ys + OL_ROWH) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     if (te->idcode != 0 && tselem->id) {
@@ -816,7 +816,7 @@ static bool outliner_id_remap_find_tree_element(bContext *C,
                                                 const float y)
 {
   for (TreeElement &te : *tree) {
-    if (y > te.ys && y < te.ys + UI_UNIT_Y) {
+    if (y > te.ys && y < te.ys + OL_ROWH) {
       TreeStoreElem *tselem = TREESTORE(&te);
 
       if ((tselem->type == TSE_SOME_ID) && tselem->id) {
@@ -1150,7 +1150,7 @@ static wmOperatorStatus lib_relocate(
 static wmOperatorStatus outliner_lib_relocate_invoke_do(
     bContext *C, ReportList *reports, TreeElement *te, const float mval[2], const bool reload)
 {
-  if (mval[1] > te->ys && mval[1] < te->ys + UI_UNIT_Y) {
+  if (mval[1] > te->ys && mval[1] < te->ys + OL_ROWH) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     if (te->idcode == ID_LI && tselem->id) {
@@ -1510,13 +1510,14 @@ void OUTLINER_OT_clear_filter(wmOperatorType *ot)
 
 void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outliner)
 {
-  int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y;
+  outliner_row_height_set(space_outliner);
+  int starty = int(region->v2d.tot.ymax) - OL_ROWH;
 
   tree_iterator::all_open(*space_outliner, [&](TreeElement *te) {
     /* store coord and continue, we need coordinates for elements outside view too */
     te->xs = 0;
     te->ys = float(starty);
-    starty -= UI_UNIT_Y;
+    starty -= OL_ROWH;
   });
 }
 

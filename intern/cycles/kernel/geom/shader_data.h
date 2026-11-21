@@ -110,7 +110,11 @@ ccl_device_inline void shader_setup_from_ray(KernelGlobals kg,
   if (backfacing) {
     sd->flag |= SD_BACKFACING;
     sd->Ng = -sd->Ng;
-    sd->N = -sd->N;
+    /* Only turn the normal around when it points away from the viewer, so bent normals
+     * (leaf cards) shade the same from both sides. */
+    if (dot(sd->N, sd->wi) < 0.0f) {
+      sd->N = -sd->N;
+    }
 #ifdef __DPDU__
     sd->dPdu = -sd->dPdu;
     sd->dPdv = -sd->dPdv;
@@ -226,7 +230,11 @@ ccl_device_inline void shader_setup_from_sample(KernelGlobals kg,
     if (backfacing) {
       sd->flag |= SD_BACKFACING;
       sd->Ng = -sd->Ng;
-      sd->N = -sd->N;
+      /* Only turn the normal around when it points away from the viewer, so bent normals
+       * (leaf cards) shade the same from both sides. */
+      if (dot(sd->N, sd->wi) < 0.0f) {
+        sd->N = -sd->N;
+      }
 #ifdef __DPDU__
       sd->dPdu = -sd->dPdu;
       sd->dPdv = -sd->dPdv;

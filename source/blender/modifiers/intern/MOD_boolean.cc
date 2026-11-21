@@ -43,9 +43,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "GEO_mesh_boolean.hh"
+#include "GEO_mesh_merge_by_distance.hh"
 #include "GEO_randomize.hh"
 
 #include "bmesh.hh"
+#include "bmesh_tools.hh"
 #include "tools/bmesh_intersect.hh"
 
 // #define DEBUG_TIME
@@ -72,7 +74,8 @@ static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_re
   }
   if (bmd->flag & eBooleanModifierFlag_Collection) {
     /* The Exact solver tolerates an empty collection. */
-    return !col && bmd->solver != eBooleanModifierSolver_Mesh_Arr;
+    return !col && bmd->solver != eBooleanModifierSolver_Mesh_Arr &&
+           bmd->solver != eBooleanModifierSolver_Auto;
   }
   return false;
 }
@@ -164,7 +167,8 @@ static bool BMD_error_messages(const Object *ob, ModifierData *md)
   bool error_returns_result = false;
 
   const bool operand_collection = (bmd->flag & eBooleanModifierFlag_Collection) != 0;
-  const bool use_exact = bmd->solver == eBooleanModifierSolver_Mesh_Arr;
+  const bool use_exact = bmd->solver == eBooleanModifierSolver_Mesh_Arr ||
+                         bmd->solver == eBooleanModifierSolver_Auto;
   const bool use_manifold = bmd->solver == eBooleanModifierSolver_Manifold;
   const bool operation_intersect = bmd->operation == eBooleanModifierOp_Intersect;
 
@@ -407,7 +411,15 @@ static Mesh *non_float_boolean_mesh(BooleanModifierData *bmd,
     return mesh;
   }
 
-  geometry::boolean::Solver solver = bmd->solver == eBooleanModifierSolver_Mesh_Arr ?
+  /* Self merges the loose parts of the mesh, which overlap: only Exact handles that. */
+  const bool self_operand = (bmd->flag & eBooleanModifierFlag_SelfOperand) != 0;
+  const bool use_self = self_operand || (bmd->flag & eBooleanModifierFlag_Self) != 0;
+  const bool hole_tolerant = (bmd->flag & eBooleanModifierFlag_HoleTolerant) != 0;
+  /* Auto tries Manifold first, unless the options need Exact. */
+  const bool use_auto = bmd->solver == eBooleanModifierSolver_Auto && !use_self && !hole_tolerant;
+  geometry::boolean::Solver solver = (bmd->solver == eBooleanModifierSolver_Mesh_Arr ||
+                                      self_operand ||
+                                      (bmd->solver == eBooleanModifierSolver_Auto && !use_auto)) ?
                                          geometry::boolean::Solver::MeshArr :
                                          geometry::boolean::Solver::Manifold;
   meshes.append(mesh);
@@ -467,16 +479,29 @@ static Mesh *non_float_boolean_mesh(BooleanModifierData *bmd,
     }
   }
 
-  const bool use_self = (bmd->flag & eBooleanModifierFlag_Self) != 0;
-  const bool hole_tolerant = (bmd->flag & eBooleanModifierFlag_HoleTolerant) != 0;
   geometry::boolean::BooleanOpParameters op_params;
-  op_params.boolean_mode = geometry::boolean::Operation(bmd->operation);
+  op_params.boolean_mode = self_operand ? geometry::boolean::Operation::Union :
+                                          geometry::boolean::Operation(bmd->operation);
   op_params.no_self_intersections = !use_self;
   op_params.watertight = !hole_tolerant;
   op_params.no_nested_components = false;
   geometry::boolean::BooleanError error = geometry::boolean::BooleanError::NoError;
   Mesh *result = geometry::boolean::mesh_boolean(
       meshes, transforms, material_remaps, op_params, solver, nullptr, &error);
+  if (use_auto && error != geometry::boolean::BooleanError::NoError) {
+    /* Manifold could not do it, Exact can. */
+    if (result != nullptr && result != mesh) {
+      BKE_id_free(nullptr, result);
+    }
+    error = geometry::boolean::BooleanError::NoError;
+    result = geometry::boolean::mesh_boolean(meshes,
+                                             transforms,
+                                             material_remaps,
+                                             op_params,
+                                             geometry::boolean::Solver::MeshArr,
+                                             nullptr,
+                                             &error);
+  }
 
   if (error != geometry::boolean::BooleanError::NoError) {
     if (error == geometry::boolean::BooleanError::NonManifold) {
@@ -501,12 +526,64 @@ static Mesh *non_float_boolean_mesh(BooleanModifierData *bmd,
 }
 #endif
 
+/** Merges flat triangles back into faces, removes points along straight edges and merges points
+ * that are almost on top of each other. */
+static Mesh *clean_result(Mesh *result, const Mesh *input)
+{
+  if (std::optional<Mesh *> merged = geometry::mesh_merge_by_distance_all(
+          *result, IndexMask(result->verts_num), 1e-5f))
+  {
+    if (result != input) {
+      BKE_id_free(nullptr, result);
+    }
+    result = *merged;
+  }
+  BMeshCreateParams create_params{};
+  BMeshFromMeshParams convert_params{};
+  convert_params.calc_face_normal = true;
+  convert_params.calc_vert_normal = true;
+  BMesh *bm = BKE_mesh_to_bmesh_ex(result, &create_params, &convert_params);
+  /* Faces that turn less than this count as flat. */
+  const float angle = 0.00872665f;
+  BM_mesh_decimate_dissolve(
+      bm, angle, false, BMO_Delimit(BMO_DELIM_MATERIAL | BMO_DELIM_SEAM | BMO_DELIM_SHARP));
+  Mesh *cleaned = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, result);
+  BM_mesh_free(bm);
+  if (result != input) {
+    BKE_id_free(nullptr, result);
+  }
+  return cleaned;
+}
+
+static Mesh *modify_mesh_impl(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh);
+
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
+{
+  BooleanModifierData *bmd = reinterpret_cast<BooleanModifierData *>(md);
+  Mesh *result = modify_mesh_impl(md, ctx, mesh);
+  if ((bmd->flag & eBooleanModifierFlag_Clean) && result != nullptr && result != mesh &&
+      result->faces_num > 0)
+  {
+    result = clean_result(result, mesh);
+  }
+  return result;
+}
+
+static Mesh *modify_mesh_impl(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   BooleanModifierData *bmd = reinterpret_cast<BooleanModifierData *>(md);
   Object *object = ctx->object;
   Mesh *result = mesh;
   Collection *collection = bmd->collection;
+
+  if (bmd->flag & eBooleanModifierFlag_SelfOperand) {
+#ifdef WITH_GMP
+    return non_float_boolean_mesh(bmd, ctx, mesh);
+#else
+    BKE_modifier_set_error(ctx->object, md, "Self needs the Exact solver, which is not built in");
+    return mesh;
+#endif
+  }
 
   /* Return result for certain errors. */
   if (BMD_error_messages(ctx->object, md)) {
@@ -610,19 +687,27 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   ui::Layout &layout = *panel->layout;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  layout.prop(ptr, "operation", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  const int operand = RNA_enum_get(ptr, "operand_type");
+  const bool self_operand = operand == eBooleanModifierFlag_SelfOperand;
+  if (!self_operand) {
+    layout.prop(ptr, "operation", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  }
 
   layout.use_property_split_set(true);
 
   layout.prop(ptr, "operand_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if (RNA_enum_get(ptr, "operand_type") == eBooleanModifierFlag_Object) {
+  if (operand == eBooleanModifierFlag_Object) {
     layout.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
-  else {
+  else if (operand == eBooleanModifierFlag_Collection) {
     layout.prop(ptr, "collection", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  layout.prop(ptr, "solver", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  /* Self always uses Exact. */
+  if (!self_operand) {
+    layout.prop(ptr, "solver", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  }
+  layout.prop(ptr, "use_clean", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_error_message_draw(layout, ptr);
 }
@@ -632,7 +717,12 @@ static void solver_options_panel_draw(const bContext * /*C*/, Panel *panel)
   ui::Layout &layout = *panel->layout;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  const bool use_exact = RNA_enum_get(ptr, "solver") == eBooleanModifierSolver_Mesh_Arr;
+  const bool self_operand = RNA_enum_get(ptr, "operand_type") ==
+                            eBooleanModifierFlag_SelfOperand;
+  /* Auto may fall back to Exact, so it shows the Exact options. */
+  const bool use_exact = self_operand ||
+                         RNA_enum_get(ptr, "solver") == eBooleanModifierSolver_Mesh_Arr ||
+                         RNA_enum_get(ptr, "solver") == eBooleanModifierSolver_Auto;
   const bool use_manifold = RNA_enum_get(ptr, "solver") == eBooleanModifierSolver_Manifold;
 
   layout.use_property_split_set(true);

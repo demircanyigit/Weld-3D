@@ -29,6 +29,8 @@ enum class NodeGroupOutputTypes : uint8_t {
   ViewerNode = 1 << 1,
   FileOutputNode = 1 << 2,
   NodePreviews = 1 << 3,
+  /* Also run nodes whose outputs lead nowhere, so they get previews too. */
+  UnlinkedNodes = 1 << 4,
 };
 ENUM_OPERATORS(NodeGroupOutputTypes)
 

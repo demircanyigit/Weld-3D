@@ -67,7 +67,10 @@ class Relations : Overlay {
     /* TODO (not_mark): pick literally anything else that's sensible. */
     const float4 &constraint_color = res.theme.colors.grid_axis_z; /* ? */
 
-    if (ob->parent && (DRW_object_visibility_in_active_context(ob->parent) & OB_VISIBLE_SELF)) {
+    /* Weld 3D: no line to a group, which has nothing drawn at its origin. */
+    if (ob->parent && !(ob->parent->transflag & OB_TRANSFLAG_GROUP) &&
+        (DRW_object_visibility_in_active_context(ob->parent) & OB_VISIBLE_SELF))
+    {
       const float3 &parent_pos = ob->runtime->parent_display_origin;
       /* Reverse order to have less stipple overlap. */
       relations_buf_.append(ob->object_to_world().location(), parent_pos, relation_color);

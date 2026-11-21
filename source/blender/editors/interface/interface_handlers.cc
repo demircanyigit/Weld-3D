@@ -3914,6 +3914,11 @@ static int ui_do_but_textedit(
       if (ui_do_but_extra_operator_icon(C, but, data, event)) {
         break;
       }
+      /* Per-row duplicate/delete icons in the search list. */
+      if (data->searchbox && searchbox_item_action_event(C, data->searchbox, but, event)) {
+        retval = WM_UI_HANDLER_BREAK;
+        break;
+      }
 
       const bool had_selection = but->selsta != but->selend;
 

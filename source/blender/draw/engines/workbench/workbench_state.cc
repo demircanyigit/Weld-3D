@@ -5,6 +5,7 @@
 #include "workbench_private.hh"
 
 #include "DNA_material_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_userdef_types.h"
 
 #include "BKE_camera.h"
@@ -294,6 +295,19 @@ void SceneState::init(const DRWContext *context,
                              false;
 };
 
+/** Whether the object shows a Bone Colors modifier, whose colors Solid shading always shows. */
+static bool object_shows_bone_colors(const Object &ob)
+{
+  const int mode = (ob.mode & OB_MODE_EDIT) ? (eModifierMode_Realtime | eModifierMode_Editmode) :
+                                              eModifierMode_Realtime;
+  for (const ModifierData &md : ob.modifiers) {
+    if (md.type == eModifierType_BoneColors && (md.mode & mode) == mode) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool mesh_has_color_attribute(const Mesh &mesh)
 {
   if (mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
@@ -401,7 +415,10 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
     /* Force texture or vertex mode if object is in paint mode. */
     const bool is_vertpaint_mode = is_active && (scene_state.object_mode == CTX_MODE_PAINT_VERTEX);
     const bool is_texpaint_mode = is_active && (scene_state.object_mode == CTX_MODE_PAINT_TEXTURE);
-    if (is_vertpaint_mode && has_color()) {
+    if (!is_texpaint_mode && object_shows_bone_colors(*ob) && has_color()) {
+      color_type = V3D_SHADING_VERTEX_COLOR;
+    }
+    else if (is_vertpaint_mode && has_color()) {
       color_type = V3D_SHADING_VERTEX_COLOR;
     }
     else if (is_texpaint_mode && has_uv()) {

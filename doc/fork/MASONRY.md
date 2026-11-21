@@ -4,8 +4,9 @@
 
 Covers faces with brick, stone or paving blocks: 20 patterns from running bond and Flemish to
 herringbone, cobblestone, flagstone and fans. The blocks stick out of the
-face, with mortar joints between them. Random length, height, depth, tilt and shape break up the
-pattern, and the blocks and mortar can get their own materials.
+face, or sit centered on it, with gaps between them, in one or more layers. The faces under the
+blocks are removed. Random length, height, depth, tilt and shape break up the pattern, and the
+blocks can get one material of their own.
 
 For whole stones stacked into a solid wall, see [Stonework](STONEWORK.md). For boards, see
 [Planks](PLANKS.md).
@@ -44,10 +45,17 @@ Add menu it's in the **Build** column.
 - **Angle**: Turn the pattern on the face.
 - **Length**: Size of a block along the rows.
 - **Height**: Size of a block across the rows.
-- **Depth**: How far the blocks stick out of the face.
-- **Mortar**: Width of the joints between the blocks.
-- **Offset**: 0 puts the blocks on the face, 1 sinks them in so their tops are at the face.
-- **Backing**: Keep the faces under the blocks, to show as mortar.
+- **Depth**: Thickness of one layer of blocks.
+- **Layers**: Layers of blocks through the thickness, one behind the other. Each layer is shifted
+  half a block along the rows from the one before, so the joints don't line up, the way bricks are
+  laid in a thick wall.
+- **Gap**: Space between the blocks.
+- **Layer Gap**: Space between the layers. Only used with more than one layer.
+- **Centered**: Centers the layers on the face instead of standing them on it, so the face runs
+  through the middle of the wall. Each block's depth grows from its middle, so Random Depth makes
+  both sides uneven.
+- **Offset**: 0 puts the blocks on the face, 1 sinks them in so their tops are at the face. Not used
+  when Centered is on.
 - **Border**: A row of blocks along the outline of each face. Only on convex faces.
 - **Toothed**: Blocks at the edges of a face stick out whole instead of being cut.
 - **Continuous Walls**: Continue wall patterns across vertical faces with rigid bricks; Auto direction only. Sharp edges and corners of 45 degrees or more break the layout.
@@ -55,15 +63,21 @@ Add menu it's in the **Build** column.
 - **Center**: Center of the fans or rings. Without one, the middle of the mesh.
 - **Random Length**: Change the length of each block.
 - **Random Height**: Change the height of each row.
-- **Random Depth**: Change how far each block sticks out.
+- **Random Depth**: Change how far each block sticks out. With more than one layer, only the
+  outer layer changes, so the layers don't run into each other.
 - **Tilt**: Largest random tilt of a block.
 - **Stone Shape**: Make the outlines of the blocks uneven.
 - **Dome**: Round the tops of the blocks.
 - **Seed**: Changes the random values.
+- **Damage**: Removes some of the blocks, for ruins and broken walls.
+  - **Noise**: in patches. **Size** sets how big the patches are.
+  - **Gradient**: from one side, the most at that side. **Direction** picks the side, +Z for a
+    wall that crumbles from the top.
+  - **Gradient + Noise**: from one side with a ragged edge. **Noise** sets how ragged.
+  - **Amount**: share of the blocks removed.
 - **Vertex Group**: Only faces with all their points in this group get blocks.
-- **Materials**: Give the blocks and the mortar their own materials.
-- **Block Material**: Material index of the blocks.
-- **Mortar Material**: Material index of the faces under the blocks.
+- **Material**: Give the blocks one material. **Index** is its material index. Off, each block
+  keeps the material of its face.
 
 Small blocks on big faces make a lot of geometry, so start with a few faces.
 
@@ -116,12 +130,14 @@ right-angle breaks, round-wall seams, closed brick meshes, and modifier/node agr
 ## As a node
 
 Geometry Nodes has a **Masonry** node that shares its code with this modifier. It can also use a
-custom tile. See [NODES.md](NODES.md#masonry).
+custom tile. The node still has Backing and a mortar material, and one layer only. See [NODES.md](NODES.md#masonry).
 
 ## In Python
 
 ```python
 mod = obj.modifiers.new("Masonry", 'MASONRY')
+mod.layers = 2
+mod.use_centered = True
 ```
 
 The Python type is `MasonryModifier`. Official Blender doesn't know this modifier, so a file that

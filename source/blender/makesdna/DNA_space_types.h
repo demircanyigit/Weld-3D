@@ -207,7 +207,11 @@ struct SpaceOutliner {
   short lib_override_view_mode = 0;
   short storeflag = 0;
   char search_flags = 0;
-  char _pad[6] = {};
+  /** Weld 3D: #eSpaceOutliner_RowSize. */
+  char row_size = 0;
+  /** Weld 3D: #eSpaceOutliner_CountMode, the face or triangle count column. */
+  char count_mode = 0;
+  char _pad[4] = {};
 
   /** Selection syncing flag (#WM_OUTLINER_SYNC_SELECT_FROM_OBJECT and similar flags). */
   char sync_select_dirty = 0;

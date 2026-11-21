@@ -51,11 +51,40 @@ static bool sh_geo_poll_default(const bke::bNodeType * /*ntype*/,
   return true;
 }
 
-static bool common_poll_default(const bke::bNodeType * /*ntype*/,
+/** The value nodes the Tree modifier can work out for every branch. */
+static bool is_tree_graph_value_node(const StringRef idname)
+{
+  return STR_ELEM(idname.data(),
+                  "ShaderNodeValue",
+                  "ShaderNodeMath",
+                  "ShaderNodeVectorMath",
+                  "ShaderNodeMapRange",
+                  "ShaderNodeClamp",
+                  "ShaderNodeMix",
+                  "ShaderNodeCombineXYZ",
+                  "ShaderNodeSeparateXYZ",
+                  "ShaderNodeFloatCurve",
+                  "ShaderNodeTexNoise",
+                  "ShaderNodeTexWhiteNoise");
+}
+
+static bool common_poll_default(const bke::bNodeType *ntype,
                                 const bNodeTree *ntree,
                                 const char **r_disabled_hint)
 {
-  if (!STR_ELEM(ntree->idname, "ShaderNodeTree", "GeometryNodeTree", "CompositorNodeTree")) {
+  if (STREQ(ntree->idname, "TreeGraphNodeTree")) {
+    if (!is_tree_graph_value_node(ntype->idname)) {
+      *r_disabled_hint = RPT_("Not a node the Tree modifier can use");
+      return false;
+    }
+    return true;
+  }
+  if (!STR_ELEM(ntree->idname,
+                "ShaderNodeTree",
+                "GeometryNodeTree",
+                "CompositorNodeTree",
+                "TextureGraphNodeTree"))
+  {
     *r_disabled_hint = RPT_("Not a shader, geometry, or compositor node tree");
     return false;
   }

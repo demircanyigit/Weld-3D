@@ -35,6 +35,8 @@ set(SRC
   intern/mesh_channels.cc
   intern/mesh_face_extrude.cc
   intern/radial_array.cc
+  intern/resample_mesh.cc
+  intern/rigid_pieces.cc
   intern/uvw_map.cc
   intern/uv_scale.cc
   intern/mesh_divide.cc
@@ -50,6 +52,10 @@ set(SRC
   intern/decimate_backend_types.hh
   intern/mesh_clip.cc
   intern/mesh_collapse.cc
+  intern/mesh_lean.cc
+  intern/mesh_chisel.cc
+  intern/mesh_wrap.cc
+  intern/mesh_bricks.cc
   intern/mesh_dice.cc
   intern/edge_damage.cc
   intern/mesh_dissolve.cc
@@ -64,10 +70,13 @@ set(SRC
   intern/mesh_cleanup.cc
   intern/mesh_stonework.cc
   intern/mesh_distribute.cc
+  intern/place_objects.cc
   intern/mesh_materialize.cc
   intern/mesh_shatter.cc
   intern/mesh_sim_cache.cc
   intern/mesh_smooth.cc
+  intern/mesh_rock.cc
+  intern/mesh_tree.cc
   intern/mesh_voronoi_fracture.cc
   intern/pmp_mesh_conversion.hh
   intern/mesh_boolean.cc
@@ -126,6 +135,11 @@ set(SRC
   GEO_mesh_channels.hh
   GEO_mesh_face_extrude.hh
   GEO_radial_array.hh
+  GEO_resample_mesh.hh
+  GEO_mesh_lean.hh
+  GEO_mesh_chisel.hh
+  GEO_mesh_wrap.hh
+  intern/rigid_pieces.hh
   GEO_uvw_map.hh
   GEO_uv_scale.hh
   GEO_mesh_divide.hh
@@ -138,6 +152,7 @@ set(SRC
   GEO_mesh_decimate.hh
   GEO_mesh_clip.hh
   GEO_mesh_collapse.hh
+  GEO_mesh_bricks.hh
   GEO_mesh_dice.hh
   GEO_edge_damage.hh
   GEO_mesh_dissolve.hh
@@ -149,10 +164,13 @@ set(SRC
   GEO_mesh_cleanup.hh
   GEO_mesh_stonework.hh
   GEO_mesh_distribute.hh
+  GEO_place_objects.hh
   GEO_mesh_materialize.hh
   GEO_mesh_shatter.hh
   GEO_mesh_sim_cache.hh
   GEO_mesh_smooth.hh
+  GEO_mesh_rock.hh
+  GEO_mesh_tree.hh
   GEO_mesh_voronoi_fracture.hh
   GEO_mesh_boolean.hh
   GEO_mesh_copy_selection.hh
@@ -187,6 +205,7 @@ set(SRC
   GEO_volume_grid_resample.hh
   intern/mesh_boolean_intern.hh
   intern/mesh_boolean_manifold.hh
+  intern/mesh_fracture_cell.hh
 )
 
 set(LIB

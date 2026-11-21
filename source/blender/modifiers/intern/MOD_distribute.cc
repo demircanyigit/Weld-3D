@@ -61,6 +61,8 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
   DistributeModifierData *dmd = reinterpret_cast<DistributeModifierData *>(md);
   walk(user_data, ob, reinterpret_cast<ID **>(&dmd->collection), IDWALK_CB_USER);
   walk(user_data, ob, reinterpret_cast<ID **>(&dmd->fillers), IDWALK_CB_USER);
+  DistributeModifierData *pick_data = reinterpret_cast<DistributeModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&pick_data->mortar_material_index_pick), IDWALK_CB_USER);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -253,6 +255,13 @@ static void modify_geometry_set(ModifierData *md,
     mortar.noise_detail = dmd.noise_detail;
     mortar.seed = dmd.seed;
     mortar.material_index = dmd.mortar_material_index;
+    if (dmd.mortar_material_index_pick != nullptr) {
+      /* The mortar copies the materials of the surface, so the picked one is added to it. */
+      Mesh *surface_for_write = geometry_set->get_mesh_for_write();
+      mortar.material_index = MOD_material_slot(
+          *surface_for_write, dmd.mortar_material_index_pick, mortar.material_index);
+      surface = surface_for_write;
+    }
     mortar.selection = selection;
     std::string message;
     keep = geometry::distribute_mortar(*surface, mortar, message);
@@ -325,7 +334,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
     n.prop(ptr, "noise_strength", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     n.prop(ptr, "noise_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     n.prop(ptr, "noise_detail", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    layout.prop(ptr, "mortar_material_index", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    modifier_material_ui(layout, ptr, "mortar_material_index_pick", "mortar_material_index", std::nullopt);
   }
   else {
     layout.prop(ptr, "use_keep_surface", UI_ITEM_NONE, std::nullopt, ICON_NONE);

@@ -75,8 +75,22 @@ class SimCacheHasher {
  * \return A new mesh owned by the caller, or null with \a r_error set.
  */
 Mesh *sim_cache_get(const SimCacheKey &key,
+                    const Mesh &materials_from,
                     FunctionRef<Mesh *(const char **r_error)> compute,
                     const char **r_error);
+
+/**
+ * Makes a computed mesh ready to be kept in the cache. The cache keeps it longer than the Edit
+ * Mode data and the evaluated materials it points to, so those are cleared. The material slots
+ * stay, empty.
+ */
+void sim_cache_mesh_prepare(Mesh &mesh);
+
+/**
+ * A copy of a cached mesh for the caller, with the materials of \a materials_from in its slots.
+ * Slots past the materials of \a materials_from stay empty.
+ */
+Mesh *sim_cache_mesh_copy(const Mesh &cached, const Mesh &materials_from);
 
 /**
  * Like #sim_cache_get, for results that are more than one mesh. The value is shared with the

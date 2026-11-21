@@ -201,6 +201,16 @@ class NODE_HT_header(Header):
                     layout.popover(panel="NODE_PT_geometry_node_tool_mode", text="Modes")
                     layout.popover(panel="NODE_PT_geometry_node_tool_options", text="Options")
                 display_pin = False
+        elif snode.tree_type == 'TextureGraphNodeTree':
+            NODE_MT_editor_menus.draw_collapsible(context, layout)
+            layout.separator_spacer()
+            layout.template_ID(snode, "node_tree", new="node.new_texture_graph")
+            if snode.node_tree:
+                layout.operator("node.texture_graph_update", text="", icon='FILE_REFRESH')
+        elif snode.tree_type == 'TreeGraphNodeTree':
+            NODE_MT_editor_menus.draw_collapsible(context, layout)
+            layout.separator_spacer()
+            layout.template_ID(snode, "node_tree", new="node.new_tree_graph")
         else:
             # Custom node tree is edited as independent ID block
             NODE_MT_editor_menus.draw_collapsible(context, layout)
@@ -313,6 +323,10 @@ class NODE_MT_add(node_add_menu.AddNodeMenu):
             layout.menu_contents("NODE_MT_shader_node_add_all")
         elif snode.tree_type == 'TextureNodeTree':
             layout.menu_contents("NODE_MT_texture_node_add_all")
+        elif snode.tree_type == 'TextureGraphNodeTree':
+            layout.menu_contents("NODE_MT_texture_graph_node_add_all")
+        elif snode.tree_type == 'TreeGraphNodeTree':
+            layout.menu_contents("NODE_MT_tree_graph_node_add_all")
         elif nodeitems_utils.has_node_categories(context):
             # Actual node sub-menus are defined by draw functions from node categories.
             nodeitems_utils.draw_node_categories_menu(self, context)
@@ -343,6 +357,10 @@ class NODE_MT_swap(node_add_menu.SwapNodeMenu):
             layout.menu_contents("NODE_MT_shader_node_swap_all")
         elif snode.tree_type == 'TextureNodeTree':
             layout.menu_contents("NODE_MT_texture_node_swap_all")
+        elif snode.tree_type == 'TextureGraphNodeTree':
+            layout.menu_contents("NODE_MT_texture_graph_node_swap_all")
+        elif snode.tree_type == 'TreeGraphNodeTree':
+            layout.menu_contents("NODE_MT_tree_graph_node_swap_all")
 
 
 class NODE_MT_view(Menu):
@@ -354,6 +372,7 @@ class NODE_MT_view(Menu):
         snode = context.space_data
         is_compositor = snode.tree_type == 'CompositorNodeTree'
 
+        layout.prop(snode, "show_region_channels", text="Library")
         layout.prop(snode, "show_region_toolbar")
         layout.prop(snode, "show_region_ui")
 
@@ -780,6 +799,48 @@ class NODE_MT_context_menu(Menu):
             props.doc_id = active_node.bl_idname
 
 
+class NODE_PT_texture_graph(Panel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Texture"
+    bl_label = "Texture Graph"
+
+    @classmethod
+    def poll(cls, context):
+        snode = context.space_data
+        return snode.tree_type == 'TextureGraphNodeTree' and snode.node_tree is not None
+
+    def draw(self, context):
+        layout = self.layout
+        tree = context.space_data.node_tree
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column(align=True)
+        col.prop(tree, "width", text="Size X")
+        col.prop(tree, "height", text="Y")
+
+        layout.prop(tree, "use_auto_update")
+        layout.operator("node.texture_graph_update", icon='FILE_REFRESH')
+
+        layout.separator()
+        layout.operator("node.texture_graph_create_material", icon='MATERIAL')
+
+        outputs = [item for item in tree.interface.items_tree
+                   if item.item_type == 'SOCKET' and item.in_out == 'OUTPUT']
+        if outputs:
+            layout.separator()
+            col = layout.column(align=True)
+            col.label(text="Images")
+            images = context.blend_data.images
+            for item in outputs:
+                name = "{:s} {:s}".format(tree.name, item.name)
+                row = col.row()
+                row.label(text=item.name, icon='IMAGE_DATA' if name in images else 'BLANK1')
+                row.label(text=name if name in images else "Not made yet")
+
+
 class NODE_PT_active_node_generic(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
@@ -990,7 +1051,7 @@ class NODE_PT_overlay(Panel):
             col.prop(overlay, "show_timing", text="Timings")
             col.prop(overlay, "show_named_attributes", text="Named Attributes")
 
-        if snode.tree_type == 'CompositorNodeTree':
+        if snode.tree_type in {'CompositorNodeTree', 'TextureGraphNodeTree'}:
             col.prop(overlay, "show_timing", text="Timings")
 
 
@@ -1209,6 +1270,7 @@ classes = (
     NODE_MT_node_tree_interface_new_item,
     NODE_MT_node_tree_interface_context_menu,
     NODE_PT_node_tree_animation,
+    NODE_PT_texture_graph,
     NODE_PT_active_node_generic,
     NODE_PT_texture_mapping,
     NODE_PT_active_tool,

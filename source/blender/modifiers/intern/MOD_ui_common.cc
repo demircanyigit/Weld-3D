@@ -16,6 +16,7 @@
 #include "BKE_modifier.hh"
 #include "BKE_screen.hh"
 
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
 #include "DNA_screen_types.h"
@@ -87,6 +88,99 @@ static void set_modifier_expand_flag(const bContext * /*C*/, Panel *panel, short
 /* -------------------------------------------------------------------- */
 /** \name Modifier Panel Layouts
  * \{ */
+void modifier_array_source_draw(ui::Layout &layout, PointerRNA *ptr)
+{
+  layout.prop(ptr, "source", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  const int source = RNA_enum_get(ptr, "source");
+  if (source == MOD_ARRAY_SOURCE_MESH) {
+    return;
+  }
+
+  if (source == MOD_ARRAY_SOURCE_COLLECTION) {
+    layout.prop(ptr, "collection", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  else if (source == MOD_ARRAY_SOURCE_OBJECTS) {
+    const std::string name = RNA_string_get(ptr, "name");
+    PropertyRNA *list = RNA_struct_find_property(ptr, "objects");
+    const int count = RNA_property_collection_length(ptr, list);
+    for (int i = 0; i < count; i++) {
+      PointerRNA item;
+      RNA_property_collection_lookup_int(ptr, list, i, &item);
+      ui::Layout &row = layout.row(true);
+      row.prop(&item, "object", UI_ITEM_NONE, i == 0 ? IFACE_("Objects") : "", ICON_NONE);
+      PointerRNA remove = row.op("OBJECT_OT_array_object_remove", "", ICON_X);
+      RNA_string_set(&remove, "modifier", name.c_str());
+      RNA_int_set(&remove, "index", i);
+    }
+    ui::Layout &add = layout.row(true);
+    add.use_property_split_set(false);
+    PointerRNA op = add.op("OBJECT_OT_array_object_add", IFACE_("Add Object"), ICON_ADD);
+    RNA_string_set(&op, "modifier", name.c_str());
+  }
+
+  layout.prop(ptr, "pick", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (RNA_enum_get(ptr, "pick") == MOD_ARRAY_PICK_RANDOM) {
+    layout.prop(ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+}
+
+void modifier_place_source_draw(ui::Layout &layout,
+                                PointerRNA *ptr,
+                                const StringRef pattern_names,
+                                const StringRef pattern_error)
+{
+  layout.prop(ptr, "source", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  const int source = RNA_enum_get(ptr, "source");
+  const int pick = RNA_enum_get(ptr, "pick");
+  const std::string pattern = RNA_string_get(ptr, "pattern");
+  const bool show_weight = pick == MOD_PLACE_PICK_RANDOM;
+  const bool show_count = pick == MOD_PLACE_PICK_PATTERN &&
+                          pattern.find_first_not_of(" ,;	") == std::string::npos;
+
+  if (source == MOD_PLACE_SOURCE_COLLECTION) {
+    layout.prop(ptr, "collection", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  else {
+    const std::string name = RNA_string_get(ptr, "name");
+    PropertyRNA *list = RNA_struct_find_property(ptr, "objects");
+    const int count = RNA_property_collection_length(ptr, list);
+    for (int i = 0; i < count; i++) {
+      PointerRNA item;
+      RNA_property_collection_lookup_int(ptr, list, i, &item);
+      ui::Layout &row = layout.row(true);
+      /* Numbered, as the pattern names them. */
+      row.prop(&item, "object", UI_ITEM_NONE, std::to_string(i + 1), ICON_NONE);
+      if (show_weight) {
+        row.prop(&item, "weight", UI_ITEM_NONE, "", ICON_NONE);
+      }
+      else if (show_count) {
+        row.prop(&item, "count", UI_ITEM_NONE, "", ICON_NONE);
+      }
+      PointerRNA remove = row.op("OBJECT_OT_array_object_remove", "", ICON_X);
+      RNA_string_set(&remove, "modifier", name.c_str());
+      RNA_int_set(&remove, "index", i);
+    }
+    ui::Layout &add = layout.row(true);
+    add.use_property_split_set(false);
+    PointerRNA op = add.op("OBJECT_OT_array_object_add", IFACE_("Add Object"), ICON_ADD);
+    RNA_string_set(&op, "modifier", name.c_str());
+  }
+
+  layout.prop(ptr, "pick", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (pick == MOD_PLACE_PICK_PATTERN) {
+    layout.prop(ptr, "pattern", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    if (!pattern_error.is_empty()) {
+      layout.label(pattern_error, ICON_ERROR);
+    }
+    else if (!pattern_names.is_empty()) {
+      layout.label(pattern_names, ICON_NONE);
+    }
+  }
+  else if (pick == MOD_PLACE_PICK_RANDOM) {
+    layout.prop(ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+}
+
 void modifier_error_message_draw(ui::Layout &layout, PointerRNA *ptr)
 {
   ModifierData *md = static_cast<ModifierData *>(ptr->data);
@@ -118,6 +212,11 @@ PointerRNA *modifier_panel_get_property_pointers(Panel *panel, PointerRNA *r_ob_
 
   ui::panel_context_pointer_set(panel, "modifier", ptr);
 
+  /* A baked modifier is not calculated, so its settings do nothing until it is unbaked. */
+  if (static_cast<const ModifierData *>(ptr->data)->bake_mesh != nullptr) {
+    panel->layout->active_set(false);
+  }
+
   return ptr;
 }
 
@@ -137,6 +236,20 @@ void modifier_vgroup_ui(ui::Layout &layout,
     sub.active_set(has_vertex_group);
     sub.use_property_decorate_set(false);
     sub.prop(ptr, *invert_vgroup_prop, UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
+  }
+}
+
+void modifier_material_ui(ui::Layout &layout,
+                          PointerRNA *ptr,
+                          const StringRefNull material_prop,
+                          const StringRefNull index_prop,
+                          const std::optional<StringRef> text)
+{
+  layout.prop(ptr, material_prop, UI_ITEM_NONE, text, ICON_NONE);
+  if (RNA_pointer_get(ptr, material_prop.c_str()).data == nullptr) {
+    /* In a row with no label, the slot number goes next to it with no label as well. */
+    const bool no_label = text.has_value() && text->is_empty();
+    layout.prop(ptr, index_prop, UI_ITEM_NONE, no_label ? "" : IFACE_("Slot"), ICON_NONE);
   }
 }
 
@@ -236,6 +349,17 @@ static void modifier_ops_extra_draw(bContext *C, ui::Layout *layout, void *md_v)
     layout->op("OBJECT_OT_modifier_apply",
                CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Apply"),
                ICON_CHECKMARK);
+  }
+
+  /* Bake. */
+  if (ob->type == OB_MESH) {
+    layout->op("OBJECT_OT_modifier_bake",
+               md->bake_mesh ? IFACE_("Bake Again") : IFACE_("Bake"),
+               ICON_MODIFIER_BAKE);
+    if (md->bake_mesh) {
+      layout->op("OBJECT_OT_modifier_unbake", IFACE_("Unbake"), ICON_MODIFIER_UNBAKE);
+    }
+    layout->separator();
   }
 
   /* Apply as shapekey. */
@@ -412,6 +536,13 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
     row.prop(ptr, "show_viewport", UI_ITEM_NONE, "", ICON_NONE);
     row.prop(ptr, "show_render", UI_ITEM_NONE, "", ICON_NONE);
     buttons_number += 2;
+  }
+
+  /* Baked: the button shows it, and unbakes. */
+  if (md->bake_mesh) {
+    sub = &row.row(true);
+    sub->op("OBJECT_OT_modifier_unbake", "", ICON_MODIFIER_BAKE);
+    buttons_number++;
   }
 
   /* Extra operators menu. */

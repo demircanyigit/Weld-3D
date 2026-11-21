@@ -74,6 +74,7 @@ set(SRC
   templates/interface_template_keymap.cc
   templates/interface_template_layers.cc
   templates/interface_template_light_linking.cc
+  templates/interface_template_node_library.cc
   templates/interface_template_list.cc
   templates/interface_template_matrix.cc
   templates/interface_template_modifiers.cc

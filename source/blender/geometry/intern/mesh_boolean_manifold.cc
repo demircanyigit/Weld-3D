@@ -2093,7 +2093,8 @@ Mesh *mesh_fracture_manifold(const Mesh &mesh,
                                   vert_pieces,
                                   &r_vert_pieces);
 
-    /* Cuts have to be flat and use the first material, instead of one that is added for them. */
+    /* The cuts are flat. They come from a mesh with no materials or face sets, so they would all
+     * get the first of each. */
     r_interior_faces.reinitialize(result->faces_num);
     for (const int i : r_interior_faces.index_range()) {
       r_interior_faces[i] = out_face_ids[i] >= mesh.faces_num;
@@ -2104,21 +2105,83 @@ Mesh *mesh_fracture_manifold(const Mesh &mesh,
     MutableSpan(result->mat, result->totcol).copy_from({mesh.mat, mesh.totcol});
     bke::MutableAttributeAccessor attributes = result->attributes_for_write();
     if (result->faces_num > 0) {
+      const OffsetIndices<int> faces = result->faces();
+      const Span<int> corner_verts = result->corner_verts();
+      const Span<float3> positions = result->vert_positions();
+      /* Gives the cut faces of each piece the value that covers most of the outside of that
+       * piece, so the value stays what it was where the piece came from. A piece with no outside
+       * gets the main value of all, or \a fallback when no face has one. */
+      auto inherit_from_outside = [&](MutableSpan<int> values, const int fallback) {
+        Map<int64_t, float> area_of_piece_value;
+        Map<int, float> area_of_value;
+        for (const int i : r_interior_faces.index_range()) {
+          if (r_interior_faces[i]) {
+            continue;
+          }
+          const int piece = r_vert_pieces[corner_verts[faces[i].first()]];
+          const int value = values[i];
+          const float area = bke::mesh::face_area_calc(positions, corner_verts.slice(faces[i]));
+          area_of_piece_value.add_or_modify(
+              (int64_t(piece) << 32) | int64_t(uint32_t(value)),
+              [&](float *sum) { *sum = area; },
+              [&](float *sum) { *sum += area; });
+          area_of_value.add_or_modify(
+              value, [&](float *sum) { *sum = area; }, [&](float *sum) { *sum += area; });
+        }
+        int main_value = fallback;
+        float main_area = -1.0f;
+        for (const auto item : area_of_value.items()) {
+          if (item.value > main_area || (item.value == main_area && item.key < main_value)) {
+            main_value = item.key;
+            main_area = item.value;
+          }
+        }
+        Map<int, std::pair<int, float>> value_of_piece;
+        for (const auto item : area_of_piece_value.items()) {
+          const int piece = int(item.key >> 32);
+          const int value = int(uint32_t(item.key & 0xffffffff));
+          value_of_piece.add_or_modify(
+              piece,
+              [&](std::pair<int, float> *best) { *best = {value, item.value}; },
+              [&](std::pair<int, float> *best) {
+                if (item.value > best->second || (item.value == best->second && value < best->first))
+                {
+                  *best = {value, item.value};
+                }
+              });
+        }
+        for (const int i : r_interior_faces.index_range()) {
+          if (r_interior_faces[i]) {
+            const int piece = r_vert_pieces[corner_verts[faces[i].first()]];
+            const std::pair<int, float> *found = value_of_piece.lookup_ptr(piece);
+            values[i] = found ? found->first : main_value;
+          }
+        }
+      };
+
       bke::SpanAttributeWriter<bool> sharp_faces = attributes.lookup_or_add_for_write_span<bool>(
           "sharp_face", bke::AttrDomain::Face);
-      bke::SpanAttributeWriter<int> materials = attributes.lookup_for_write_span<int>(
-          "material_index");
       for (const int i : r_interior_faces.index_range()) {
         if (r_interior_faces[i]) {
           sharp_faces.span[i] = true;
-          if (materials) {
-            materials.span[i] = 0;
-          }
         }
       }
       sharp_faces.finish();
+      bke::SpanAttributeWriter<int> materials = attributes.lookup_for_write_span<int>(
+          "material_index");
+      if (materials && materials.domain == bke::AttrDomain::Face) {
+        inherit_from_outside(materials.span, 0);
+      }
       if (materials) {
         materials.finish();
+      }
+      bke::SpanAttributeWriter<int> face_sets = attributes.lookup_for_write_span<int>(
+          ".sculpt_face_set");
+      if (face_sets && face_sets.domain == bke::AttrDomain::Face) {
+        inherit_from_outside(face_sets.span, 1);
+      }
+      if (face_sets) {
+        face_sets.finish();
       }
     }
     free_cuts_mesh();

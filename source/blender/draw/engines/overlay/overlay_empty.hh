@@ -119,6 +119,11 @@ class Empties : Overlay {
       return;
     }
 
+    /* Weld 3D: groups draw a dashed box around their members instead (see #GroupBounds). */
+    if (ob_ref.object->transflag & OB_TRANSFLAG_GROUP) {
+      return;
+    }
+
     const float4 color = res.object_wire_color(ob_ref, state);
     const select::ID select_id = res.select_id(ob_ref);
     if (ob_ref.object->empty_drawtype == OB_EMPTY_IMAGE) {

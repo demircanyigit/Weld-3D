@@ -111,6 +111,9 @@ class Result {
   /* The precision of the result's data. Only relevant for GPU textures. CPU buffers and single
    * values are always stored using full precision. */
   ResultPrecision precision_ = ResultPrecision::Half;
+  /* If true, reads past the image edges wrap around to the other side, see
+   * Context::wrap_edges. Copied from the context at construction. */
+  bool wrap_edges_ = false;
   /* If true, the result is a single value, otherwise, the result is an image. */
   bool is_single_value_ = false;
   /* The type of storage used to hold the data. Used to correctly interpret the data union. */
@@ -419,6 +422,15 @@ class Result {
   /* Identical to load_pixel but with zero boundary condition. */
   template<typename T, bool CouldBeSingleValue = false> T load_pixel_zero(const int2 &texel) const;
 
+  /* Wraps the given texel around the image edges so it lands inside the image. */
+  int2 wrap_texel(const int2 &texel) const;
+
+  /* True if reads past the edges wrap around, see Context::wrap_edges. */
+  bool wraps_edges() const
+  {
+    return wrap_edges_;
+  }
+
   /* Stores the given pixel value in the pixel at the given texel coordinates. Assumes the result
    * stores a value of the given template type. */
   template<typename T> void store_pixel(const int2 &texel, const T &pixel_value);
@@ -584,8 +596,25 @@ BLI_INLINE_METHOD T Result::load_pixel_extended(const int2 &texel) const
     BLI_assert(!this->is_single_value());
   }
 
+  if (wrap_edges_) {
+    return this->cpu_data().typed<T>()[this->get_pixel_index(this->wrap_texel(texel))];
+  }
+
   const int2 clamped_texel = math::clamp(texel, int2(0), domain_.data_size - int2(1));
   return this->cpu_data().typed<T>()[this->get_pixel_index(clamped_texel)];
+}
+
+BLI_INLINE_METHOD int2 Result::wrap_texel(const int2 &texel) const
+{
+  const int2 size = domain_.data_size;
+  int2 wrapped = texel;
+  if (wrapped.x < 0 || wrapped.x >= size.x) {
+    wrapped.x = ((wrapped.x % size.x) + size.x) % size.x;
+  }
+  if (wrapped.y < 0 || wrapped.y >= size.y) {
+    wrapped.y = ((wrapped.y % size.y) + size.y) % size.y;
+  }
+  return wrapped;
 }
 
 template<typename T, bool CouldBeSingleValue>
@@ -603,6 +632,9 @@ BLI_INLINE_METHOD T Result::load_pixel_fallback(const int2 &texel, const T &fall
   if (texel.x < 0 || texel.y < 0 || texel.x >= domain_.data_size.x ||
       texel.y >= domain_.data_size.y)
   {
+    if (wrap_edges_) {
+      return this->cpu_data().typed<T>()[this->get_pixel_index(this->wrap_texel(texel))];
+    }
     return fallback;
   }
 
@@ -676,10 +708,12 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
 
   const int2 size = domain_.data_size;
   const float2 texel_coordinates = coordinates * float2(size);
+  const Extension wrapped_mode_x = wrap_edges_ ? Extension::Repeat : mode_x;
+  const Extension wrapped_mode_y = wrap_edges_ ? Extension::Repeat : mode_y;
 
   if constexpr (is_same_any_v<T, float, float2, float3, float4, Color>) {
-    const math::InterpWrapMode extension_mode_x = map_extension_mode_to_wrap_mode(mode_x);
-    const math::InterpWrapMode extension_mode_y = map_extension_mode_to_wrap_mode(mode_y);
+    const math::InterpWrapMode extension_mode_x = map_extension_mode_to_wrap_mode(wrapped_mode_x);
+    const math::InterpWrapMode extension_mode_y = map_extension_mode_to_wrap_mode(wrapped_mode_y);
 
     T pixel_value = T(0);
     const float *buffer = static_cast<const float *>(this->cpu_data().data());
@@ -732,8 +766,8 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
   }
   else {
     /* Non float types do not support interpolations and are always sampled in nearest. */
-    const int x = wrap_coordinates(texel_coordinates.x, size.x, mode_x);
-    const int y = wrap_coordinates(texel_coordinates.y, size.y, mode_y);
+    const int x = wrap_coordinates(texel_coordinates.x, size.x, wrapped_mode_x);
+    const int y = wrap_coordinates(texel_coordinates.y, size.y, wrapped_mode_y);
     if (x < 0 || y < 0) {
       return T(0);
     }

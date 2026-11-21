@@ -4469,6 +4469,40 @@ static void rna_def_space_outliner(BlenderRNA *brna)
       prop, "Sync Outliner Selection", "Sync outliner selection with other editors");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
+  static const EnumPropertyItem row_size_items[] = {
+      {SO_ROW_COMPACT, "COMPACT", 0, "Compact", "Short rows, to see more at once"},
+      {SO_ROW_NORMAL, "NORMAL", 0, "Normal", ""},
+      {SO_ROW_ROOMY, "ROOMY", 0, "Roomy", "Tall rows with a thumbnail of each object"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  prop = RNA_def_property(srna, "row_size", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "row_size");
+  RNA_def_property_enum_items(prop, row_size_items);
+  RNA_def_property_ui_text(prop, "Row Height", "Height of the rows");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  static const EnumPropertyItem count_mode_items[] = {
+      {SO_COUNT_NONE, "NONE", 0, "None", "Show no count"},
+      {SO_COUNT_FACES, "FACES", 0, "Faces", "Show the face count of each object"},
+      {SO_COUNT_TRIS, "TRIS", 0, "Triangles", "Show the triangle count of each object"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  prop = RNA_def_property(srna, "count_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "count_mode");
+  RNA_def_property_enum_items(prop, count_mode_items);
+  RNA_def_property_ui_text(prop,
+                           "Count",
+                           "Face or triangle count column; collections and groups show the total "
+                           "of everything inside");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  prop = RNA_def_property(srna, "use_follow_active", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SO_FOLLOW_ACTIVE);
+  RNA_def_property_ui_text(prop,
+                           "Auto Focus",
+                           "When the active object changes, open its parents and scroll to it");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
   prop = RNA_def_property(srna, "show_mode_column", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SO_MODE_COLUMN);
   RNA_def_property_ui_text(
@@ -8647,7 +8681,9 @@ static void rna_def_space_node(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Space Node Editor", "Node editor space data");
 
   rna_def_space_generic_show_region_toggles(
-      srna, (1 << RGN_TYPE_TOOLS) | (1 << RGN_TYPE_UI) | (1 << RGN_TYPE_ASSET_SHELF));
+      srna,
+      (1 << RGN_TYPE_TOOLS) | (1 << RGN_TYPE_UI) | (1 << RGN_TYPE_ASSET_SHELF) |
+          (1 << RGN_TYPE_CHANNELS));
 
   prop = RNA_def_property(srna, "tree_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_dummy_DEFAULT_items);

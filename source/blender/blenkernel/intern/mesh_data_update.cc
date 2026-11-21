@@ -6,6 +6,8 @@
  * \ingroup bke
  */
 
+#include "MEM_guardedalloc.h"
+
 #include "DNA_cloth_types.h"
 #include "DNA_customdata_types.h"
 #include "DNA_key_types.h"
@@ -14,6 +16,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
+#include "BLI_memory_utils.hh"
 #include "BLI_linklist.h"
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
@@ -24,6 +27,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
+#include "BKE_eval_break.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_cache.hh"
 #include "BKE_geometry_set.hh"
@@ -217,6 +221,28 @@ static void mesh_calc_finalize(const Mesh &mesh_input, Mesh &mesh_eval)
  * The purpose of the geometry set is to store all geometry components that are generated
  * by modifiers to allow outputting non-mesh data from modifiers.
  */
+/**
+ * When Esc was pressed while the modifier ran, turn it off in the viewport, so the next update
+ * does not start it again. Modifiers that check for it already gave back their input.
+ */
+static void stop_modifier_on_esc(const Object &ob, ModifierData *md, const ModifierEvalContext &mectx)
+{
+  if (!BKE_modifier_stop_requested(&mectx)) {
+    return;
+  }
+  md->mode &= ~eModifierMode_Realtime;
+  ModifierData *md_orig = BKE_modifier_get_original(&ob, md);
+  if (md_orig) {
+    md_orig->mode &= ~eModifierMode_Realtime;
+  }
+  BKE_modifier_set_error(&ob, md, "Stopped with Esc, turn it on in the viewport to compute again");
+  const Object *ob_orig = DEG_get_original(&ob);
+  eval_break::note_stopped(
+      const_cast<ID *>(&ob_orig->id),
+      std::string("Stopped \"") + md->name + "\" on \"" + (ob.id.name + 2) +
+          "\", turn it on in the viewport to compute again");
+}
+
 static Mesh *modifier_modify_mesh_and_geometry_set(ModifierData *md,
                                                    const ModifierEvalContext &mectx,
                                                    Mesh *input_mesh,
@@ -293,6 +319,34 @@ static const ModifierData *modifier_stack_end(const Object &ob)
   return active ? active->next : nullptr;
 }
 
+/** The last modifier before  end with a baked result that is on for this evaluation. The
+ * stack starts from its baked mesh and skips it and everything before it. */
+static ModifierData *modifier_stack_baked(ModifierData *first,
+                                          const ModifierData *end,
+                                          const int required_mode)
+{
+  ModifierData *baked = nullptr;
+  for (ModifierData *md = first; md != end; md = md->next) {
+    if (md->bake_mesh && (md->mode & required_mode) == required_mode) {
+      baked = md;
+    }
+  }
+  return baked;
+}
+
+/** A copy of a baked mesh to evaluate on, with the materials of the object's mesh so changes to
+ * them still show. */
+static Mesh *baked_mesh_copy_for_eval(const Mesh &baked, const Mesh &mesh_input)
+{
+  Mesh *mesh = BKE_mesh_copy_for_eval(baked);
+  if (mesh->mat != nullptr) {
+    MEM_delete(mesh->mat);
+  }
+  mesh->mat = MEM_dupalloc(mesh_input.mat);
+  mesh->totcol = mesh_input.totcol;
+  return mesh;
+}
+
 static void mesh_calc_modifiers(Depsgraph &depsgraph,
                                 const Scene &scene,
                                 Object &ob,
@@ -336,7 +390,7 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
   /* Modifier evaluation contexts for different types of modifiers. */
   ModifierApplyFlag apply_render = use_render ? MOD_APPLY_RENDER : ModifierApplyFlag(0);
   ModifierApplyFlag apply_cache = use_cache ? MOD_APPLY_USECACHE : ModifierApplyFlag(0);
-  const ModifierEvalContext mectx = {&depsgraph, &ob, apply_render | apply_cache};
+  ModifierEvalContext mectx = {&depsgraph, &ob, apply_render | apply_cache};
   const ModifierEvalContext mectx_orco = {&depsgraph, &ob, apply_render | MOD_APPLY_ORCO};
 
   /* Get effective list of modifiers to execute. Some effects like shape keys
@@ -368,8 +422,29 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
     set_rest_position(*mesh);
   }
 
+  /* A baked modifier holds the result of the stack up to it: start from that. */
+  const ModifierData *baked_md = modifier_stack_baked(md, end_md, required_mode);
+  const Mesh *baked_mesh = baked_md ? baked_md->bake_mesh : nullptr;
+  if (baked_mesh) {
+    while (md != baked_md->next) {
+      md = md->next;
+      md_datamask = md_datamask->next;
+    }
+    if (mesh) {
+      BKE_id_free(nullptr, mesh);
+    }
+    mesh = baked_mesh_copy_for_eval(*baked_mesh, mesh_input);
+    if (ob.modifier_flag & OB_MODIFIER_FLAG_ADD_REST_POSITION) {
+      set_rest_position(*mesh);
+    }
+    /* The baked mesh may not match the original, so there is no deformed original to give. */
+    if (use_deform && r_deform) {
+      mesh_deform = BKE_mesh_copy_for_eval(mesh_input);
+    }
+  }
+
   /* Apply all leading deform modifiers. */
-  if (use_deform) {
+  if (use_deform && !baked_mesh) {
     for (; md != end_md; md = md->next, md_datamask = md_datamask->next) {
       const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
@@ -409,7 +484,7 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
   }
 
   /* Apply all remaining constructive and deforming modifiers. */
-  bool have_non_onlydeform_modifiers_applied = false;
+  bool have_non_onlydeform_modifiers_applied = baked_mesh != nullptr;
   for (; md != end_md; md = md->next, md_datamask = md_datamask->next) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
@@ -482,7 +557,9 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
         mesh = BKE_mesh_copy_for_eval(mesh_input);
         ASSERT_IS_VALID_MESH_OUTPUT(mesh);
       }
+      mectx.esc_presses = eval_break::presses();
       BKE_modifier_deform_verts(md, &mectx, mesh, mesh->vert_positions_for_write());
+      stop_modifier_on_esc(ob, md, mectx);
     }
     else {
       bool check_for_needs_mapping = false;
@@ -565,8 +642,10 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
       }
 
       ASSERT_IS_VALID_MESH_INPUT(mesh);
+      mectx.esc_presses = eval_break::presses();
       Mesh *mesh_next = modifier_modify_mesh_and_geometry_set(md, mectx, mesh, geometry_set_final);
       ASSERT_IS_VALID_MESH_OUTPUT(mesh_next);
+      stop_modifier_on_esc(ob, md, mectx);
 
       if (mesh_next) {
         /* if the modifier returned a new mesh, release the old one */
@@ -580,7 +659,8 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
       /* create an orco mesh in parallel */
       if (nextmask.vmask & CD_MASK_ORCO) {
         if (!mesh_orco) {
-          mesh_orco = create_orco_mesh(ob, mesh_input, nullptr, CD_ORCO);
+          mesh_orco = baked_mesh ? BKE_mesh_copy_for_eval(*baked_mesh) :
+                                   create_orco_mesh(ob, mesh_input, nullptr, CD_ORCO);
         }
 
         nextmask.vmask &= ~CD_MASK_ORCO;
@@ -614,7 +694,9 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
       /* create cloth orco mesh in parallel */
       if (nextmask.vmask & CD_MASK_CLOTH_ORCO) {
         if (!mesh_orco_cloth) {
-          mesh_orco_cloth = create_orco_mesh(ob, mesh_input, nullptr, CD_CLOTH_ORCO);
+          mesh_orco_cloth = baked_mesh ?
+                                BKE_mesh_copy_for_eval(*baked_mesh) :
+                                create_orco_mesh(ob, mesh_input, nullptr, CD_CLOTH_ORCO);
         }
 
         nextmask.vmask &= ~CD_MASK_CLOTH_ORCO;
@@ -664,6 +746,11 @@ static void mesh_calc_modifiers(Depsgraph &depsgraph,
   /* Denotes whether the object which the modifier stack came from owns the mesh or whether the
    * mesh is shared across multiple objects since there are no effective modifiers. */
   const bool is_own_mesh = (mesh != &mesh_input);
+
+  /* Orco coordinates of a baked stack are the baked positions. */
+  if (baked_mesh && !mesh_orco && (final_datamask.vmask & CD_MASK_ORCO)) {
+    mesh_orco = BKE_mesh_copy_for_eval(*baked_mesh);
+  }
 
   /* Add orco coordinates to final and deformed mesh if requested. */
   if (final_datamask.vmask & CD_MASK_ORCO) {
@@ -791,7 +878,7 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
   const bool use_render = (DEG_get_mode(&depsgraph) == DAG_EVAL_RENDER);
   /* Modifier evaluation contexts for different types of modifiers. */
   ModifierApplyFlag apply_render = use_render ? MOD_APPLY_RENDER : ModifierApplyFlag(0);
-  const ModifierEvalContext mectx = {&depsgraph, &ob, MOD_APPLY_USECACHE | apply_render};
+  ModifierEvalContext mectx = {&depsgraph, &ob, MOD_APPLY_USECACHE | apply_render};
   const ModifierEvalContext mectx_orco = {&depsgraph, &ob, MOD_APPLY_ORCO};
 
   /* Get effective list of modifiers to execute. Some effects like shape keys
@@ -832,7 +919,32 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
 
   bool non_deform_modifier_applied = false;
   const ModifierData *end_md = modifier_stack_end(ob);
-  for (int i = 0; md != end_md; i++, md = md->next, md_datamask = md_datamask->next) {
+  int i = 0;
+
+  /* A baked modifier holds the result of the stack up to it: start from that. */
+  const ModifierData *baked_md = modifier_stack_baked(md, end_md, required_mode);
+  const Mesh *baked_mesh = baked_md ? baked_md->bake_mesh : nullptr;
+  if (baked_mesh) {
+    while (md != baked_md->next) {
+      md = md->next;
+      md_datamask = md_datamask->next;
+      i++;
+    }
+    /* The cage stays the edit mesh when it came at or before the baked modifier. */
+    if (r_cage && cageIndex < i) {
+      mesh_cage = mesh;
+    }
+    else if (mesh != mesh_cage) {
+      BKE_id_free(nullptr, mesh);
+    }
+    mesh = baked_mesh_copy_for_eval(*baked_mesh, mesh_input);
+    if (ob.modifier_flag & OB_MODIFIER_FLAG_ADD_REST_POSITION) {
+      set_rest_position(*mesh);
+    }
+    non_deform_modifier_applied = true;
+  }
+
+  for (; md != end_md; i++, md = md->next, md_datamask = md_datamask->next) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
     if (!editbmesh_modifier_is_enabled(&scene, &ob, md, non_deform_modifier_applied)) {
       continue;
@@ -865,6 +977,8 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
     }
 
     if (mti->type == ModifierTypeType::OnlyDeform) {
+      mectx.esc_presses = eval_break::presses();
+      BLI_SCOPED_DEFER([&]() { stop_modifier_on_esc(ob, md, mectx); });
       if (mti->deform_verts_EM) {
         BKE_modifier_deform_vertsEM(
             md, &mectx, &em_input, mesh, mesh_wrapper_vert_coords_ensure_for_write(mesh));
@@ -883,7 +997,8 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
       CustomData_MeshMasks mask = md_datamask->mask;
       if (mask.vmask & CD_MASK_ORCO) {
         if (!mesh_orco) {
-          mesh_orco = create_orco_mesh(ob, mesh_input, &em_input, CD_ORCO);
+          mesh_orco = baked_mesh ? BKE_mesh_copy_for_eval(*baked_mesh) :
+                                   create_orco_mesh(ob, mesh_input, &em_input, CD_ORCO);
         }
 
         mask.vmask &= ~CD_MASK_ORCO;
@@ -925,8 +1040,10 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
       }
 
       ASSERT_IS_VALID_MESH_INPUT(mesh);
+      mectx.esc_presses = eval_break::presses();
       Mesh *mesh_next = modifier_modify_mesh_and_geometry_set(md, mectx, mesh, geometry_set_final);
       ASSERT_IS_VALID_MESH_OUTPUT(mesh_next);
+      stop_modifier_on_esc(ob, md, mectx);
 
       if (mesh_next) {
         if (mesh != mesh_next) {
@@ -943,6 +1060,11 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
   }
 
   BLI_linklist_free(reinterpret_cast<LinkNode *>(datamasks), nullptr);
+
+  /* Orco coordinates of a baked stack are the baked positions. */
+  if (baked_mesh && !mesh_orco && (final_datamask.vmask & CD_MASK_ORCO)) {
+    mesh_orco = BKE_mesh_copy_for_eval(*baked_mesh);
+  }
 
   /* Add orco coordinates to final and deformed mesh if requested. */
   if (final_datamask.vmask & CD_MASK_ORCO) {

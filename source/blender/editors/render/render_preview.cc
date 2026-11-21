@@ -912,6 +912,8 @@ static void object_preview_render(const PreviewImage *prv_img,
   BKE_screen_view3d_shading_init(&shading);
   /* Enable shadows, makes it a bit easier to see the shape. */
   shading.flag |= V3D_SHADING_SHADOW;
+  /* Weld 3D: flat solid look, no shiny highlights. */
+  shading.flag &= ~V3D_SHADING_SPECULAR_HIGHLIGHT;
 
   ImBuf *ibuf = ED_view3d_draw_offscreen_imbuf_simple(depsgraph,
                                                       DEG_get_evaluated_scene(depsgraph),

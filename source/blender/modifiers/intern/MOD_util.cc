@@ -6,16 +6,22 @@
  * \ingroup modifiers
  */
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <string>
 
 #include "BLI_bitmap.h"
+#include "BLI_hash.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 #include "BLI_memory_cache.hh"
 #include "BLI_memory_counter.hh"
 
+#include "BLI_listbase_iterator.hh"
+
+#include "DNA_collection_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
@@ -23,11 +29,16 @@
 
 #include "BKE_action.hh" /* BKE_pose_channel_find_name */
 #include "BKE_attribute.hh"
+#include "BKE_collection.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_material.hh"
 #include "BKE_mesh.hh"
+#include "BKE_mesh_wrapper.hh"
+#include "BKE_geometry_set.hh"
+#include "BKE_geometry_set_instances.hh"
 #include "BKE_lattice.hh"
 
 #include "BKE_modifier.hh"
@@ -35,6 +46,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "GEO_mesh_sim_cache.hh"
+#include "GEO_realize_instances.hh"
 
 #include "MOD_modifiertypes.hh"
 #include "MOD_util.hh"
@@ -42,6 +54,110 @@
 #include "MEM_guardedalloc.h"
 
 namespace blender {
+
+/** The objects in the order they are picked, each once, without \a self. */
+static Vector<Object *> array_source_objects(const int source,
+                                             Collection *collection,
+                                             const ListBaseT<ArraySourceObject> &objects,
+                                             const Object *self)
+{
+  Vector<Object *> result;
+  auto add = [&](Object *ob) {
+    if (ob == nullptr || ob == self || result.contains(ob)) {
+      return;
+    }
+    /* Meshes, and objects that give a mesh once their instances are realized. */
+    const bool instances_collection = ob->type == OB_EMPTY && ob->instance_collection != nullptr;
+    if (ELEM(ob->type, OB_MESH, OB_CURVES_LEGACY, OB_FONT, OB_SURF) || instances_collection) {
+      result.append(ob);
+    }
+  };
+  if (source == MOD_ARRAY_SOURCE_COLLECTION && collection != nullptr) {
+    FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (collection, ob) {
+      add(ob);
+    }
+    FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
+  }
+  else if (source == MOD_ARRAY_SOURCE_OBJECTS) {
+    for (const ArraySourceObject &item : objects) {
+      add(item.object);
+    }
+  }
+  return result;
+}
+
+Vector<const Mesh *> MOD_array_source_meshes(const int source,
+                                             Collection *collection,
+                                             const ListBaseT<ArraySourceObject> &objects,
+                                             const Object *self,
+                                             Vector<bke::GeometrySet> &r_keep)
+{
+  Vector<const Mesh *> meshes;
+  for (Object *ob : array_source_objects(source, collection, objects, self)) {
+    /* Everything the object gives, its instances realized into one mesh. */
+    bke::GeometrySet geometry = bke::object_get_evaluated_geometry_set(*ob);
+    if (geometry.has_instances()) {
+      geometry::RealizeInstancesOptions options;
+      options.keep_original_ids = false;
+      options.realize_instance_attributes = false;
+      geometry = geometry::realize_instances(geometry, options).geometry;
+    }
+    const Mesh *mesh = geometry.get_mesh();
+    if (mesh == nullptr || mesh->verts_num == 0) {
+      continue;
+    }
+    meshes.append(mesh);
+    r_keep.append(std::move(geometry));
+  }
+  return meshes;
+}
+
+void MOD_array_source_update_depsgraph(const ModifierUpdateDepsgraphContext *ctx,
+                                       const int source,
+                                       Collection *collection,
+                                       const ListBaseT<ArraySourceObject> &objects,
+                                       const char *description)
+{
+  if (source == MOD_ARRAY_SOURCE_COLLECTION && collection != nullptr) {
+    DEG_add_collection_geometry_relation(ctx->node, collection, description);
+  }
+  for (Object *ob : array_source_objects(source, collection, objects, ctx->object)) {
+    if (ob->type == OB_EMPTY) {
+      DEG_add_object_relation(ctx->node, ob, DEG_OB_COMP_TRANSFORM, description);
+      DEG_add_collection_geometry_relation(ctx->node, ob->instance_collection, description);
+    }
+    else {
+      DEG_add_object_relation(ctx->node, ob, DEG_OB_COMP_GEOMETRY, description);
+    }
+  }
+}
+
+Array<int> MOD_array_source_pick(const int pick,
+                                 const int seed,
+                                 const int copies_num,
+                                 const int meshes_num)
+{
+  Array<int> result(std::max(copies_num, 0), -1);
+  if (meshes_num <= 0) {
+    return result;
+  }
+  for (const int i : result.index_range()) {
+    switch (pick) {
+      case MOD_ARRAY_PICK_IN_ORDER:
+        result[i] = i % meshes_num;
+        break;
+      case MOD_ARRAY_PICK_ALTERNATE:
+        result[i] = (i % 2 == 0) ? -1 : (i / 2) % meshes_num;
+        break;
+      case MOD_ARRAY_PICK_RANDOM:
+      default:
+        /* Hashed per copy, so more copies keep the picks of the ones before. */
+        result[i] = int(BLI_hash_int_2d(uint(i), uint(seed)) % uint(meshes_num));
+        break;
+    }
+  }
+  return result;
+}
 
 void MOD_init_texture(MappingInfoModifierData *dmd, const ModifierEvalContext *ctx)
 {
@@ -353,6 +469,30 @@ void modifier_type_init(ModifierTypeInfo *types[])
   INIT_TYPE(NormalShape);
   INIT_TYPE(Trim);
   INIT_TYPE(Tile);
+  INIT_TYPE(Patch);
+  INIT_TYPE(AutoWeights);
+  INIT_TYPE(SmoothWeights);
+  INIT_TYPE(TransferWeights);
+  INIT_TYPE(BoneColors);
+  INIT_TYPE(Pack);
+  INIT_TYPE(Rock);
+  INIT_TYPE(Masks);
+  INIT_TYPE(Snow);
+  INIT_TYPE(Tree);
+  INIT_TYPE(Resample);
+  INIT_TYPE(Lean);
+  INIT_TYPE(Chisel);
+  INIT_TYPE(Faceset);
+  INIT_TYPE(Wrap);
+  INIT_TYPE(Place);
+  INIT_TYPE(Scatter);
+  INIT_TYPE(Dent);
+  INIT_TYPE(Contact);
+  INIT_TYPE(Cable);
+  INIT_TYPE(Cracks);
+  INIT_TYPE(CollisionHull);
+  INIT_TYPE(Bricks);
+  INIT_TYPE(UVRotate);
   INIT_TYPE(UVWMap);
   INIT_TYPE(Bend);
   INIT_TYPE(Twist);
@@ -399,6 +539,36 @@ class ModifierCachedValue : public memory_cache::CachedValue {
 
 }  // namespace
 
+int MOD_material_slot(Mesh &mesh, Material *material, const int index)
+{
+  if (material == nullptr) {
+    return index;
+  }
+  if (mesh.totcol == 0) {
+    /* Faces that get no material keep pointing at an empty slot. */
+    BKE_id_material_eval_ensure_default_slot(&mesh.id);
+  }
+  const int materials_num = mesh.totcol;
+  if (mesh.mat && materials_num > 0) {
+    const int found = Span(mesh.mat, materials_num).first_index_try(material);
+    if (found != -1) {
+      return found;
+    }
+  }
+  BKE_id_material_eval_assign(&mesh.id, materials_num + 1, material);
+  return materials_num;
+}
+
+void MOD_material_slots_from(Mesh &result, const Mesh &mesh)
+{
+  if (&result == &mesh) {
+    return;
+  }
+  for (int i = result.totcol; i < mesh.totcol; i++) {
+    BKE_id_material_eval_assign(&result.id, i + 1, mesh.mat[i]);
+  }
+}
+
 Mesh *MOD_cached_modify_mesh(
     ModifierData *md,
     const ModifierEvalContext *ctx,
@@ -436,6 +606,7 @@ Mesh *MOD_cached_modify_mesh(
             if (result != nullptr) {
               /* The cache keeps its own copy. The arrays are shared, so it is cheap. */
               value->mesh = BKE_mesh_copy_for_eval(*result);
+              geometry::sim_cache_mesh_prepare(*value->mesh);
             }
             own_result = result;
             return value;
@@ -453,7 +624,10 @@ Mesh *MOD_cached_modify_mesh(
   if (value->mesh == nullptr) {
     return nullptr;
   }
-  return BKE_mesh_copy_for_eval(*value->mesh);
+  Mesh *result = geometry::sim_cache_mesh_copy(*value->mesh, *mesh);
+  /* Like a result made now: linked to the Edit Mode data of the input, if any. */
+  result->runtime->edit_mesh = mesh->runtime->edit_mesh;
+  return result;
 }
 
 }  // namespace blender
