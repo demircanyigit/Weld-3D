@@ -99,7 +99,7 @@ Favorites show their icons.
 |---|---|
 | [Modifiers](#modifiers) | 98 new modifiers, Bake and Unbake, material pickers, a [Modifier List](doc/fork/MODIFIER_LIST.md) view of the stack, [viewport gizmos](doc/fork/MODIFIER_GIZMOS.md) |
 | [Geometry Nodes](#geometry-nodes) | 77 new nodes: 24 modeling nodes, plus node versions of the new and classic modifiers |
-| [Tree and Texture Graphs](#tree-graph-and-texture-graph) | Node editors that grow trees and make textures |
+| [Tree and Texture Graphs](#tree-graph-and-texture-graph) | Node editors that grow trees, with [16 nodes](#tree-graph-nodes), and make textures, with [254 nodes](#texture-graph-nodes) |
 | [Outliner](#outliner) | Drag to reorder and parent, groups, row sizes, thumbnails, counts and color tags |
 | [Tools](#tools) | [Multi-Cut](doc/fork/MULTI_CUT.md), [face set tools](doc/fork/FACE_SETS.md), Select Similar ▸ Face Set, [orthographic view fixes](doc/fork/ORTHOGRAPHIC.md), [Bounds and Align snapping](doc/fork/SNAPPING.md) |
 | [Toolbox and Shelf](#toolbox-and-shelf) | Two new editors for your own buttons, the [Toolbox](doc/fork/TOOLBOX.md) and the [Shelf](doc/fork/SHELF.md), and icons in Quick Favorites |
@@ -494,8 +494,478 @@ Two new node editors, picked from the Node Editor's type menu.
   like a Geometry Nodes modifier. Presets: Oak, Ash, Bare Tree, Pine, Bush, Palm, Fern and Grass Tuft. Growth
   follows EZ-Tree (MIT license).
 - <img src="doc/fork/images/icons/node_texture_graph.png" width="32" height="32" alt="Texture Graph"> **Texture
-  Graph:** over 30 nodes for noise, patterns, shapes, blur, warp, levels, normal maps and more. Each output
+  Graph:** 254 nodes for noise, patterns, shapes, blur, warp, levels, normal maps and more. Each output
   becomes an image, and one click makes a material from them.
+
+### Tree Graph nodes
+
+16 nodes of its own. The Tree Graph also uses Math, Random Value, Float Curve, Noise Texture and other common nodes.
+
+**Tree**
+
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tree_trunk.png" width="32" height="32" alt="Trunk"> | Trunk | The stem a tree stands on |
+| <img src="doc/fork/images/icons/node_tree_branches.png" width="32" height="32" alt="Branches"> | Branches | A level of branches growing along their parent |
+| <img src="doc/fork/images/icons/node_tree_leaves.png" width="32" height="32" alt="Leaves"> | Leaves | Leaves along their parent |
+| <img src="doc/fork/images/icons/node_tree_fronds.png" width="32" height="32" alt="Fronds"> | Fronds | Ribbons along their parent stem, for grass, palm and fern leaves |
+| <img src="doc/fork/images/icons/node_tree_ivy.png" width="32" height="32" alt="Ivy"> | Ivy | Vines that wind around the bark of their parent as they climb |
+| <img src="doc/fork/images/icons/node_tree_roots.png" width="32" height="32" alt="Roots"> | Roots | Roots from the foot of the trunk |
+| <img src="doc/fork/images/icons/node_tree_drawn.png" width="32" height="32" alt="Drawn"> | Drawn | Branches along the splines of a curve object |
+
+**Shape**
+
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tree_force.png" width="32" height="32" alt="Force"> | Force | Turns stems toward a direction or a point as they grow |
+| <img src="doc/fork/images/icons/node_tree_avoid.png" width="32" height="32" alt="Avoid"> | Avoid | Keeps branches out of an object as they grow |
+| <img src="doc/fork/images/icons/node_tree_crown.png" width="32" height="32" alt="Crown"> | Crown | Keeps stems inside a shape |
+| <img src="doc/fork/images/icons/node_tree_prune.png" width="32" height="32" alt="Prune"> | Prune | Removes branches or leaves |
+
+**Surface**
+
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tree_bark.png" width="32" height="32" alt="Bark"> | Bark | Shapes the surface of stems |
+
+**Input**
+
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tree_branch_info.png" width="32" height="32" alt="Branch Info"> | Branch Info | What is known about the branch, leaf or frond being grown |
+| <img src="doc/fork/images/icons/node_tree_object_info.png" width="32" height="32" alt="Object Info"> | Object Info | Where an object is, how it is turned and its size |
+
+**Utilities**
+
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tree_profile.png" width="32" height="32" alt="Profile"> | Profile | A number that changes along a curve, for any number on a tree level |
+
+**Output**
+
+| | Node | What it does |
+|---|---|---|
+| <img src="doc/fork/images/icons/node_tree_output.png" width="32" height="32" alt="Tree Output"> | Tree Output | The tree the Tree modifier grows |
+
+### Texture Graph nodes
+
+254 nodes of its own, sorted as in the Add menu. Click a group to open it. The Texture Graph also uses the Compositor's color, blur and math nodes.
+
+<details>
+<summary><b>Texture</b> (4)</summary>
+
+| Node | What it does |
+|---|---|
+| Tiling Noise | Noise that repeats exactly at the image edges |
+| FX-Map | Scatter a pattern over a grid of cells, each copy with its own random offset, size, rotation and brightness |
+| Text | Draw text into an image, using any font file |
+| SVG | Draw a vector drawing from an SVG file into an image at any size |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Noise</b> (38)</summary>
+
+| Node | What it does |
+|---|---|
+| Perlin Noise | Soft gradient noise in one layer |
+| Fractal Sum Base | Value noise summed over a chosen range of layers |
+| Fractal Sum 1 | Soft value noise in four layers |
+| Fractal Sum 2 | Detailed value noise in seven layers |
+| Fractal Sum 3 | Ridges with sharp bright crests |
+| Fractal Sum 4 | Billowy noise with sharp dark creases |
+| Clouds 1 | Soft clouds |
+| Clouds 2 | Clouds with more contrast and detail |
+| Clouds 3 | Swirled detailed clouds |
+| Plasma | Clouds folded into bands |
+| Creased | Thin bright folds, like crumpled paper |
+| Fluid | Clouds swirled twice, like stirred liquid |
+| Liquid | Swirled bands, like marbled paint |
+| Gaussian Noise | Fine noise that is mostly mid gray |
+| White Noise | A random gray for every pixel |
+| White Noise Fast | A random gray for every square of a grid |
+| Blue Noise Fast | Pixel noise with no clumps |
+| Anisotropic Noise | Noise stretched into long streaks |
+| Directional Noise 1 | Smooth vertical streaks |
+| Directional Noise 2 | Detailed vertical streaks |
+| Directional Noise 3 | Wavy vertical streaks |
+| Directional Noise 4 | Thin bright vertical lines |
+| Directional Scratches | Short scratches that mostly point one way |
+| Cells 1 | Bright cell centers fading out |
+| Cells 2 | Cells with dark edges |
+| Cells 3 | A flat random gray per cell |
+| Cells 4 | Cells of three sizes on top of each other |
+| Voronoi | Cells around scattered points |
+| Voronoi Fractal | Cell distances over several sizes |
+| Crystal 1 | Shaded facets, like broken crystal |
+| Crystal 2 | Facets of two sizes |
+| Caustics | Bright wavy lines, like light under water |
+| Microscope View | Cells with soft walls, like tissue |
+| BnW Spots 1 | Black and white blobs |
+| BnW Spots 2 | Black and white blobs with rough edges |
+| BnW Spots 3 | Scattered black and white blobs |
+| Gaussian Spots 1 | Soft round spots |
+| Gaussian Spots 2 | Soft round spots of two sizes |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Grunge</b> (30)</summary>
+
+| Node | What it does |
+|---|---|
+| Grunge Galvanic Large | Large shaded flakes, like galvanized metal |
+| Grunge Galvanic Small | Small shaded flakes |
+| Grunge Leaks | Streaks running down |
+| Grunge Leaky Paint | Paint patches with drips |
+| Grunge Scratches Fine | Thin scratches |
+| Grunge Scratches Rough | Wide scratches |
+| Grunge Scratches Dirty | Scratches with dirt |
+| Grunge Shavings | Curled shavings |
+| Messy Fibers 1 | Thin tangled fibers |
+| Messy Fibers 2 | Many tangled fibers |
+| Messy Fibers 3 | Thick tangled fibers |
+| Fur 1 | Straight hairs |
+| Fur 2 | Wavy hairs |
+| Fur 3 | Short fine hairs |
+| Waveform 1 | Bars of random height, like a sound wave |
+| Dirt Gradient | Dirt that gathers toward the bottom |
+| Grunge Concrete | Pitted concrete |
+| Grunge Damas | Swirled worn patches |
+| Grunge Rough Dirty | Rough dirt with specks |
+| Grunge Rust Fine | Fine rust |
+| Grunge Spots | Scattered spots |
+| Grunge Spots Dirty | Spots with dirt |
+| Grunge Splashes Dusty | Splashes and dust |
+| Moisture Noise 1 | Soft damp patches |
+| Moisture Noise 2 | Damp patches with grain |
+| Dirt 1 | Soft dirt |
+| Dirt 2 | Specks of dirt |
+| Dirt 3 | Streaky dirt |
+| Dirt 4 | Dirt in cracks |
+| Dirt 5 | Swirled dirt with spots |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Grunge Maps</b> (15)</summary>
+
+| Node | What it does |
+|---|---|
+| Grunge Map 001 to 015 | Fifteen ready-made grunge masks |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Patterns</b> (16)</summary>
+
+| Node | What it does |
+|---|---|
+| Alveolus | Rounded cells in a honeycomb |
+| Brick 1 | Bricks twice as wide as high |
+| Brick 2 | Long thin bricks in a stepped bond |
+| Brick Generator | Bricks with full control over their layout and bevel |
+| Checker 1 | A black and white checkerboard |
+| Stripes | Parallel stripes that can lean |
+| Fibers 1 | Thin strands woven over and under |
+| Fibers 2 | Thicker strands woven over and under |
+| Mesh 1 | Thin bars woven over and under |
+| Mesh 2 | Wide blocks woven over and under |
+| Weave 1 | Threads woven over and under |
+| Weave 2 | A weave with stitches swapped at random |
+| Weave Generator | A weave with control over its blocks and threads |
+| Gaussian 1 | A grid of soft blobs |
+| Gaussian 2 | Soft blobs in staggered rows |
+| Triangle Grid | A grid of jittered triangles seen from above |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Gradients</b> (7)</summary>
+
+| Node | What it does |
+|---|---|
+| Gradient Linear 1 | A plain ramp from black to white |
+| Gradient Linear 2 | A rounded ramp up and down again, like a pipe |
+| Gradient Linear 3 | A straight ramp up and down again |
+| Gradient Axial | A ramp from one point to another |
+| Gradient Axial Reflected | A ramp to white and back between two points |
+| Gradient Circular | A ramp that sweeps around a point |
+| Gradient Radial | A fade from a center out to a radius |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Shapes</b> (8)</summary>
+
+| Node | What it does |
+|---|---|
+| Shape | One of the built-in shapes, optionally repeated |
+| Polygon 1 | A polygon made of slices that can be pulled apart |
+| Polygon 2 | A polygon filled with a ramp from the edges to the center |
+| Star | A star |
+| Starburst | Rays shooting out from the center |
+| Shape Extrude | Push a shape out into a solid, turn it and see its height from above |
+| Height Extrude | Raise a height into a solid and see it from a turned camera |
+| Panorama Shape | Place a light panel in a panorama |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Scatter</b> (13)</summary>
+
+| Node | What it does |
+|---|---|
+| Tile Generator | Lay out a grid of shapes or images |
+| Tile Sampler | Lay out a grid of shapes or images, with maps that change every tile |
+| Tile Random | Tiles split at random into smaller tiles |
+| Tile Random 2 | Rows of shapes of random width and height, touching each other |
+| Splatter | Stamp an image many times, scattered and turned |
+| Splatter Circular | Place shapes or images on rings |
+| Arc Pavement | Stones laid in fans of arcs |
+| Shape Mapper | Wrap an image around a circle or polygon |
+| Scratches Generator | Scatter wavy scratches |
+| Shape Splatter | Scatter shapes over a height, with data to make matching maps |
+| Shape Splatter Blend | Color the shapes of a Shape Splatter, each with its own pattern |
+| Shape Splatter Data Extract | Split the data of a Shape Splatter into separate maps |
+| Shape Splatter to Mask | A mask of chosen shapes of a Shape Splatter |
+
+</details>
+
+<details>
+<summary><b>Texture ▸ Stone</b> (3)</summary>
+
+| Node | What it does |
+|---|---|
+| Stone Wall | Walls of stones laid in courses or cells, with mortar between them |
+| Fitted Wall | Walls of stones cut to fit their neighbors |
+| Packed Wall | Walls of stones stacked one by one |
+
+</details>
+
+<details>
+<summary><b>Color</b> (9)</summary>
+
+| Node | What it does |
+|---|---|
+| Blend | Combine a foreground with a background, with a blend mode, opacity, mask and crop area |
+| Height Blend | Lay one height on another, the top shows where it stands higher |
+| Linear Burn | Darken by adding both images and taking away white |
+| Dissolve | Blend two images by taking random pixels from the foreground |
+| Channel Shuffle | Pick each channel of the color from any channel of two images |
+| Channel Mixer | Build each channel from a mix of the red, green and blue channels |
+| Grayscale Conversion | Turn a color image gray, choosing how |
+| Chrominance Extract | Keep only the color of an image, without its brightness |
+| Color To Mask | White where the image is close to a color |
+
+</details>
+
+<details>
+<summary><b>Color ▸ Adjust</b> (8)</summary>
+
+| Node | What it does |
+|---|---|
+| Levels | Remap the value range of an image, with a gamma curve for the midtones |
+| Contrast/Luminosity | Change the contrast and brightness |
+| Replace Color | Shift all colors so one color becomes another |
+| Replace Color Range | Replace one color and the colors close to it |
+| Color Match | Shift the colors so a source color becomes a target color |
+| Hald CLUT | Grade the colors with a Hald look-up image |
+| Quantize Color (Simple) | Snap each channel to a few even steps |
+| HDR Range Viewer | Show where values go below 0 or above 1 |
+
+</details>
+
+<details>
+<summary><b>Color ▸ Histogram</b> (12)</summary>
+
+| Node | What it does |
+|---|---|
+| Auto Levels | Stretch the values so the darkest is black and the brightest white |
+| Histogram Equalize | Spread the values evenly over the whole range |
+| Histogram Range | Squeeze the values into a smaller range and move it |
+| Histogram Shift | Shift all values, wrapping the ones past 1 back to 0 |
+| Histogram Scan | Turn values into a mask by sliding a soft step through them |
+| Non-Uniform Histogram Scan | Histogram Scan with a position and contrast that change per pixel |
+| Histogram Select | White where values are within a band, fading out around it |
+| Threshold | Turn values black or white by comparing them to a threshold |
+| Quantize Grayscale | Snap values to a few steps, like terraces |
+| Histogram Compute | Count the values of an image into a row of pixels |
+| Histogram Render | Draw the histogram of an image as a chart |
+| Min Max | Find the lowest and highest value of an image |
+
+</details>
+
+<details>
+<summary><b>Color ▸ Palette</b> (6)</summary>
+
+| Node | What it does |
+|---|---|
+| Quantize Color | Reduce an image to a few colors, with an ID map and a palette |
+| Create Color Palette | Make a palette from up to 16 colors, or add them to another palette |
+| Modify Color Palette | Change one palette color, and the ones close to it |
+| Apply Color Palette | Color an ID map with the colors of a palette |
+| View Color Palette | Show a palette as a grid of color swatches |
+| ID to Mask | White where an ID map has the chosen IDs |
+
+</details>
+
+<details>
+<summary><b>Filter</b> (11)</summary>
+
+| Node | What it does |
+|---|---|
+| Edge Detect | White shapes with sharp black gaps wherever the gray changes |
+| Non Uniform Edge Detect | Edge Detect with a different gap width for each shape |
+| Height to Normal | Make a tangent-space normal map from a grayscale height image |
+| Distance | Make a gradient around the white parts of a mask and spread colors out from them |
+| Emboss | Shade an image as if a height image were lit from one side |
+| Sharpen | Make edges in an image crisper |
+| Highpass | Keep the fine detail and flatten the broad shapes to middle gray |
+| Luminance Highpass | Remove baked lighting from the brightness only, keeping the colors |
+| Lighting Cancel High Frequencies | Remove small shading details while keeping the colors |
+| Lighting Cancel Low Frequencies | Even out broad light and shadow while keeping the colors |
+| Height Map Frequencies Mapper | Split a height map into broad shapes and fine detail |
+
+</details>
+
+<details>
+<summary><b>Filter ▸ Effects</b> (14)</summary>
+
+| Node | What it does |
+|---|---|
+| Ambient Occlusion | Darken the parts of a height that the sky can not reach |
+| Bevel | Slope the edges of shapes into a height and normal map |
+| Cross Section | Show the profile of one line through a height |
+| Shadows | Cast the shadows of a height lit from one side |
+| Curvature | Find the bends of a normal map |
+| Curvature Smooth | Find the bends of a normal map at several sizes |
+| Curvature Sobel | Find the bends of a normal map with a Sobel filter |
+| Diffusion Color | Spread the colors under a mask over the rest of the image |
+| Diffusion Grayscale | Spread the values under a mask over the rest of the image |
+| Diffusion UV | Spread a UV map under a mask over the rest of the image, across its seams |
+| Emboss With Gloss | Shade an image by a height, with a shine on the lit side |
+| Uber Emboss | Light an image as a surface shaped by a height |
+| Mosaic | Break an image into flat colored tiles |
+| Summed Area Table | Sum the pixels below and left of each pixel |
+
+</details>
+
+<details>
+<summary><b>Filter ▸ Shape Effects</b> (4)</summary>
+
+| Node | What it does |
+|---|---|
+| Extend Shape | Grow shapes outward, keeping the colors of their edges |
+| Shape Drop Shadow | Put a soft shadow under shapes |
+| Shape Glow | Make shapes glow around or inside their edges |
+| Shape Stroke | Draw a line along the edges of shapes |
+
+</details>
+
+<details>
+<summary><b>Filter ▸ Flood Fill</b> (9)</summary>
+
+| Node | What it does |
+|---|---|
+| Flood Fill | Find the separate shapes of a mask and their boxes |
+| Flood Fill Mapper | Fit a pattern into the box of every shape |
+| Flood Fill to BBox Size | Fill each shape with the size of its box |
+| Flood Fill to Color | Fill each shape with the color under its middle |
+| Flood Fill to Gradient | Fill each shape with a ramp |
+| Flood Fill to Index | Number the shapes from bottom to top |
+| Flood Fill to Position | Fill each shape with the position of its middle |
+| Flood Fill to Random Color | Fill each shape with a random color |
+| Flood Fill to Random Grayscale | Fill each shape with a random gray |
+
+</details>
+
+<details>
+<summary><b>Filter ▸ Normal Map</b> (14)</summary>
+
+| Node | What it does |
+|---|---|
+| Normal Sobel | Make a normal map from a height with a Sobel filter |
+| Height to Normal World Units | Make a normal map from a height of a real size |
+| Height Normal Blender | Add the bumps of a height to a normal map |
+| Normal to Height | Rebuild a height from a normal map |
+| Normal to Height HQ | Rebuild a height from a normal map, with more passes for large shapes |
+| Normal Blend | Mix two normal maps through a mask |
+| Normal Combine | Lay a detail normal map on the bends of a base one |
+| Normal Uncombine | Take a base normal map back out of a combined one |
+| Normal Invert | Flip the red or green of a normal map |
+| Normal Normalize | Make every vector of a normal map one long |
+| Normal Transform | Turn, scale and slide a normal map, turning its normals with it |
+| Normal Vector Rotation | Turn the normals of a normal map by a map, without moving the image |
+| Facing Normal | How much a normal map faces straight out |
+| Bent Normal | Turn a normal map toward the open sky over a height |
+
+</details>
+
+<details>
+<summary><b>Filter ▸ Blur</b> (6)</summary>
+
+| Node | What it does |
+|---|---|
+| Anisotropic Blur | Blur stretched along one direction, like motion |
+| Non-Uniform Blur | Blur that is stronger where a map is brighter |
+| Radial Blur | Blur the image as if it spun around a point |
+| Slope Blur | Smear an image along the slopes of a height map, for drips and wear |
+| Median Filter | Remove specks and noise while keeping edges sharp |
+| MLV Filter | Flatten areas of similar pixels while keeping the edges between them sharp |
+
+</details>
+
+<details>
+<summary><b>Transform</b> (18)</summary>
+
+| Node | What it does |
+|---|---|
+| Warp | Push an image along the slopes of a grayscale gradient image |
+| Directional Warp | Push an image in one direction, by an amount taken from a grayscale image |
+| Multi Directional Warp | Push an image in several directions at once and put the copies together |
+| Non Uniform Directional Warp | Push each pixel of an image in a direction read from an angle map |
+| Vector Warp | Push each pixel of an image by a vector map |
+| Vector Morph | Smear an image along the flow of a vector map |
+| Swirl | Twist an image around a point |
+| Skew | Slant an image sideways or up |
+| Trapezoid Transform | Narrow an image toward its top or bottom |
+| Non-Square Transform | Repeat, turn and slide an image that is not square |
+| Non-Uniform Rotation | Turn each pixel of an image by its own amount from a map |
+| Symmetry | Mirror one half of an image onto the other |
+| Symmetry Slice | Repeat one slice of an image around its middle |
+| Cartesian to Polar | Unroll an image around its middle into rows |
+| Polar to Cartesian | Roll an image up around the middle |
+| Auto Crop | Crop an image to what it shows and fill the frame with it |
+| Clone | Copy a round patch of an image to another place |
+| Size | Change the pixel size and bit depth that the following nodes work at |
+
+</details>
+
+<details>
+<summary><b>Transform ▸ Tiling</b> (6)</summary>
+
+| Node | What it does |
+|---|---|
+| Make It Tile Patch | Make a tiling image from soft patches of one that does not tile |
+| Make It Tile Photo | Make a photo tile by blending its edges with a shifted copy |
+| Safe Transform | Repeat, turn and slide a tiling image so it keeps tiling |
+| Noise Upscale 1 | Make a tiling noise finer from two turned copies |
+| Noise Upscale 2 | Make a tiling noise finer from three turned copies |
+| Noise Upscale 3 | Make a tiling noise finer from four turned and mirrored copies |
+
+</details>
+
+<details>
+<summary><b>Utilities ▸ Function</b> (3)</summary>
+
+| Node | What it does |
+|---|---|
+| Position | Where each pixel is and how big the image is, to build functions from |
+| Sample | Read an image at any position, wrapping around its edges |
+| Random | A random number from a seed, once or for every pixel |
+
+</details>
 
 ## Outliner
 
